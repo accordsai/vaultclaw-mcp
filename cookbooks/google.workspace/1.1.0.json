@@ -1,0 +1,292 @@
+{
+  "type": "accords.cookbook.bundle.v1",
+  "cookbook_id": "google.workspace",
+  "version": "1.1.0",
+  "title": "Google Workspace Gmail Cookbook",
+  "description": "Bounded Google Gmail recipes and plans for send, draft, reply, and thread triage workflows.",
+  "tags": ["google", "gmail", "workspace", "bounded", "email"],
+  "entries": [
+    {
+      "entry_id": "gmail_send_status_update_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "Send Status Update Email",
+      "description": "Send a plain-text status update message to an operations recipient.",
+      "tags": ["gmail", "send", "status"],
+      "connector_id": "google",
+      "verb": "google.gmail.send.v1",
+      "policy_version": "1",
+      "request": {
+        "to": ["ops@example.com"],
+        "subject": "Daily Status Update",
+        "body_text": "System health is green. No incidents detected in the last 24 hours."
+      }
+    },
+    {
+      "entry_id": "gmail_create_draft_followup_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "Create Follow-up Draft",
+      "description": "Create a follow-up draft for manual review before sending.",
+      "tags": ["gmail", "draft", "followup"],
+      "connector_id": "google",
+      "verb": "google.gmail.draft.create.v1",
+      "policy_version": "1",
+      "request": {
+        "to": ["customer@example.com"],
+        "subject": "Follow-up on Your Request",
+        "body_text": "Thanks again for your patience. Here is the requested update.",
+        "thread_id": "thread_123456"
+      }
+    },
+    {
+      "entry_id": "gmail_reply_in_thread_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "Reply in Existing Thread",
+      "description": "Send a direct reply into an existing Gmail thread.",
+      "tags": ["gmail", "reply", "thread"],
+      "connector_id": "google",
+      "verb": "google.gmail.send.v1",
+      "policy_version": "1",
+      "request": {
+        "to": ["requester@example.com"],
+        "subject": "Re: Request Update",
+        "body_text": "We have completed the requested change.",
+        "thread_id": "thread_654321"
+      }
+    },
+    {
+      "entry_id": "gmail_modify_thread_labels_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "Apply Triage Labels",
+      "description": "Apply a triage label and remove INBOX from a thread.",
+      "tags": ["gmail", "labels", "triage"],
+      "connector_id": "google",
+      "verb": "google.gmail.thread.modify.v1",
+      "policy_version": "1",
+      "request": {
+        "thread_id": "thread_654321",
+        "add_label_ids": ["Label_TRIAGED"],
+        "remove_label_ids": ["INBOX", "UNREAD"]
+      }
+    },
+    {
+      "entry_id": "gmail_plan_triage_and_archive_thread_v1",
+      "entry_type": "recipe.plan.v1",
+      "title": "Triage and Archive a Thread",
+      "description": "Read a thread, then label and archive it in a fixed two-step plan.",
+      "tags": ["gmail", "plan", "triage", "archive"],
+      "plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "get_thread",
+        "steps": [
+          {
+            "step_id": "get_thread",
+            "connector_id": "google",
+            "verb": "google.gmail.thread.get.v1",
+            "policy_version": "1",
+            "request_base": {
+              "thread_id": "thread_triage_fixed"
+            }
+          },
+          {
+            "step_id": "label_and_archive",
+            "connector_id": "google",
+            "verb": "google.gmail.thread.modify.v1",
+            "policy_version": "1",
+            "request_base": {
+              "thread_id": "thread_triage_fixed",
+              "add_label_ids": ["Label_TRIAGED"],
+              "remove_label_ids": ["INBOX", "UNREAD"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "entry_id": "gmail_plan_draft_then_label_thread_v1",
+      "entry_type": "recipe.plan.v1",
+      "title": "Draft Follow-up and Label Thread",
+      "description": "Create a draft response and mark the thread for review.",
+      "tags": ["gmail", "plan", "draft", "labels"],
+      "plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_draft",
+        "steps": [
+          {
+            "step_id": "create_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.draft.create.v1",
+            "policy_version": "1",
+            "request_base": {
+              "to": ["reviewer@example.com"],
+              "subject": "Draft: Customer Follow-up",
+              "body_text": "Please review before send.",
+              "thread_id": "thread_review_fixed"
+            }
+          },
+          {
+            "step_id": "mark_review",
+            "connector_id": "google",
+            "verb": "google.gmail.thread.modify.v1",
+            "policy_version": "1",
+            "request_base": {
+              "thread_id": "thread_review_fixed",
+              "add_label_ids": ["Label_REVIEW"],
+              "remove_label_ids": ["UNREAD"]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "entry_id": "gmail_tpl_plan_reply_and_triage_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Reply and Triage",
+      "description": "Render a two-step plan that replies in-thread and applies triage labels.",
+      "tags": ["gmail", "template", "reply", "triage"],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "reply",
+        "steps": [
+          {
+            "step_id": "reply",
+            "connector_id": "google",
+            "verb": "google.gmail.send.v1",
+            "policy_version": "1",
+            "request_base": {
+              "to": ["placeholder@example.com"],
+              "subject": "Re:",
+              "body_text": "",
+              "thread_id": "thread_placeholder"
+            }
+          },
+          {
+            "step_id": "label",
+            "connector_id": "google",
+            "verb": "google.gmail.thread.modify.v1",
+            "policy_version": "1",
+            "request_base": {
+              "thread_id": "thread_placeholder",
+              "add_label_ids": ["Label_TRIAGED"],
+              "remove_label_ids": ["INBOX"]
+            }
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/to/0",
+          "input_key": "reply_to",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/subject",
+          "input_key": "reply_subject",
+          "required": false,
+          "default": "Re:"
+        },
+        {
+          "target_path": "/steps/0/request_base/body_text",
+          "input_key": "reply_body",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/thread_id",
+          "input_key": "thread_id",
+          "required": true
+        },
+        {
+          "target_path": "/steps/1/request_base/thread_id",
+          "input_key": "thread_id",
+          "required": true
+        },
+        {
+          "target_path": "/steps/1/request_base/add_label_ids/0",
+          "input_key": "triage_label_id",
+          "required": false,
+          "default": "Label_TRIAGED"
+        },
+        {
+          "target_path": "/steps/1/request_base/remove_label_ids/0",
+          "input_key": "remove_label_id",
+          "required": false,
+          "default": "INBOX"
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_draft_for_review_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Draft for Review",
+      "description": "Render a plan that drafts a response and applies a review label to the thread.",
+      "tags": ["gmail", "template", "draft", "review"],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_draft",
+        "steps": [
+          {
+            "step_id": "create_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.draft.create.v1",
+            "policy_version": "1",
+            "request_base": {
+              "to": ["placeholder@example.com"],
+              "subject": "Draft subject",
+              "body_text": "Draft body",
+              "thread_id": "thread_placeholder"
+            }
+          },
+          {
+            "step_id": "mark_review",
+            "connector_id": "google",
+            "verb": "google.gmail.thread.modify.v1",
+            "policy_version": "1",
+            "request_base": {
+              "thread_id": "thread_placeholder",
+              "add_label_ids": ["Label_REVIEW"],
+              "remove_label_ids": ["UNREAD"]
+            }
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/to/0",
+          "input_key": "reviewer_email",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/subject",
+          "input_key": "draft_subject",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/body_text",
+          "input_key": "draft_body",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/thread_id",
+          "input_key": "thread_id",
+          "required": true
+        },
+        {
+          "target_path": "/steps/1/request_base/thread_id",
+          "input_key": "thread_id",
+          "required": true
+        },
+        {
+          "target_path": "/steps/1/request_base/add_label_ids/0",
+          "input_key": "review_label_id",
+          "required": false,
+          "default": "Label_REVIEW"
+        },
+        {
+          "target_path": "/steps/1/request_base/remove_label_ids/0",
+          "input_key": "remove_label_id",
+          "required": false,
+          "default": "UNREAD"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "type": "vaultclaw.routing.slots.v1",
+  "domain": "google.gmail",
+  "version": "1.2.0",
+  "canonical_fields": {
+    "recipients": {
+      "to": "string[]",
+      "cc": "string[]",
+      "bcc": "string[]"
+    },
+    "body": {
+      "text_plain": "string",
+      "text_html": "string"
+    },
+    "message_refs": {
+      "message_id": "string",
+      "thread_id": "string"
+    }
+  },
+  "normalization": {
+    "recipient_scalar_to_array": true,
+    "trim_whitespace": true,
+    "default_values": {
+      "cc": [],
+      "bcc": [],
+      "text_html": "",
+      "label": "inbox",
+      "format": "metadata",
+      "page_limit": 25
+    },
+    "disallowed_legacy_fields": ["body_text"]
+  },
+  "intent_slots": {
+    "send_email": {
+      "required": ["to", "subject", "text_plain"],
+      "optional": ["cc", "bcc", "text_html"]
+    },
+    "reply_email": {
+      "required": ["to", "thread_id", "text_plain"],
+      "optional": ["subject", "text_html"]
+    },
+    "create_draft": {
+      "required": ["to", "subject", "text_plain"],
+      "optional": ["cc", "bcc", "text_html"]
+    },
+    "trash_message": {
+      "required": ["message_id"],
+      "optional": []
+    },
+    "untrash_message": {
+      "required": ["message_id"],
+      "optional": []
+    },
+    "get_message_metadata": {
+      "required": ["message_id"],
+      "optional": ["format"]
+    },
+    "get_message_content": {
+      "required": ["message_id"],
+      "optional": []
+    },
+    "list_messages_by_label": {
+      "required": [],
+      "optional": ["label", "page_limit"]
+    },
+    "modify_message_labels": {
+      "required": ["message_id"],
+      "optional": ["add_label_ids", "remove_label_ids"]
+    },
+    "list_labels": {
+      "required": [],
+      "optional": []
+    },
+    "list_inbox": {
+      "required": [],
+      "optional": []
+    },
+    "send_status_update": {
+      "required": [],
+      "optional": []
+    }
+  },
+  "clarification_policy": {
+    "max_questions": 1,
+    "ask_when": [
+      "missing_required_slots",
+      "ambiguous_recipient",
+      "ambiguous_message_or_thread_reference",
+      "low_intent_confidence"
+    ]
+  }
+}
