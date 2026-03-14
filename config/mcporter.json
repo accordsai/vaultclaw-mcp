@@ -3,7 +3,6 @@
     "accords-vaultclaw": {
       "command": "/Users/sam/code/accords-mcp/bin/accords-mcp",
       "env": {
-        "VC_AGENT_TOKEN": "ses_0a976b778bf50202243c67aa75a5302d8ff3a04b83724bbad6fbdd804c452e89",
         "VC_BASE_URL": "http://localhost",
         "VC_UNIX_SOCKET": "/Users/sam/Library/Application Support/vaultclaw/vaultd.sock"
       }
