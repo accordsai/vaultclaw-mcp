@@ -132,3 +132,37 @@ func TestDecisionOutcomeProjection(t *testing.T) {
 		t.Fatalf("expected PENDING from WAITING, got %s", got)
 	}
 }
+
+func TestBuildApprovalRequiredErrorIncludesAttestationLink(t *testing.T) {
+	h := ApprovalHandoff{
+		Handle: ApprovalHandle{
+			Kind:        ApprovalKindJob,
+			JobID:       "job_1",
+			ChallengeID: "ach_1",
+			PendingID:   "apj_1",
+		},
+		State: ApprovalState{
+			Status:          ApprovalStatePending,
+			DecisionOutcome: DecisionOutcomePending,
+			PendingApproval: map[string]any{
+				"remote_attestation_url": "https://alerts.accords.ai/a/req_1?t=abc",
+			},
+		},
+		Vault: map[string]any{
+			"request_id":        "req_1",
+			"vault_http_status": float64(202),
+		},
+	}
+
+	oe := BuildApprovalRequiredError(h)
+	details, _ := oe.Details["approval"].(map[string]any)
+	if details == nil {
+		t.Fatalf("approval details missing: %v", oe.Details)
+	}
+	if got := strVal(details["remote_attestation_url"]); got != "https://alerts.accords.ai/a/req_1?t=abc" {
+		t.Fatalf("unexpected remote_attestation_url=%q", got)
+	}
+	if got := strVal(details["remote_attestation_link_markdown"]); got != "[https://alerts.accords.ai/a/req_1?t=abc](https://alerts.accords.ai/a/req_1?t=abc)" {
+		t.Fatalf("unexpected remote_attestation_link_markdown=%q", got)
+	}
+}

@@ -7,6 +7,7 @@ Go `stdio` MCP server for Vaultclaw actions plus local cookbook/template catalog
 - `stdio`-only MCP server.
 - Token-only session configuration (no passphrase handling).
 - Connector tools: list/get/validate/execute/execute-job.
+- Document helper tools: suggest/latest for Vaultclaw document types.
 - Plan tools: validate/execute/run status.
 - Prerequisite tools: slot bindings + unbounded profiles.
 - Automatic unbounded profile orchestration for:
@@ -113,6 +114,8 @@ Example:
 3. `vaultclaw_connector_validate(request)`
 4. `vaultclaw_connector_execute(request)`
 5. `vaultclaw_connector_execute_job(request, orchestration?)`
+6. `vaultclaw_document_types_suggest(query, top_k?)`
+7. `vaultclaw_document_types_latest(type_id, subject_id?)`
 
 `vaultclaw_connector_validate` calls Vaultclaw `/v0/connectors/validate` and returns field-level validation errors (`path`, `code`, `message`, `expected`, `actual`) when payload shape is invalid.
 
@@ -132,6 +135,12 @@ Example:
   "auto_create_profiles": true
 }
 ```
+
+Document helper tool behavior:
+
+- `vaultclaw_document_types_suggest` calls Vaultclaw `/v0/docs/types/suggest`.
+- `vaultclaw_document_types_latest` calls Vaultclaw `/v0/docs/types/latest`.
+- For non-success responses, MCP preserves Vaultclaw code/details in the failure envelope (`vault_code` and `details.vault_error`).
 
 Example:
 
@@ -162,21 +171,38 @@ Example:
 
 ### Safe Gmail Execution Order
 
-1. Discover (`vaultclaw_recipes_search`) and prefer newest cookbook entries first (`google.workspace@1.2.0` before `1.1.0`).
+1. Discover (`vaultclaw_recipes_search`) and prefer newest cookbook entries first (`google.workspace@1.3.0` before `1.2.0`).
 2. Render template (`vaultclaw_template_render`) or load recipe/plan payload.
 3. Validate payload (`vaultclaw_connector_validate` or `vaultclaw_plan_validate`).
-4. Execute only after validation passes.
-5. If approval is required, wait for user approval, then resume via `vaultclaw_approval_wait`.
+4. If payload includes `document_attachments`, preflight each `type_id` with `vaultclaw_document_types_latest`.
+5. Execute only after validation/preflight passes.
+6. If approval is required, wait for user approval, then resume via `vaultclaw_approval_wait`.
 
 Canonical Gmail payload shape:
 
 - Recipients must be arrays: `to`, `cc`, `bcc`
 - Message bodies use `text_plain` / `text_html`
+- Document attachments use `document_attachments` array with strict object keys:
+  - required: `type_id`
+  - optional: `filename`, `content_type`
+  - no additional keys
 
 Deprecated Gmail shapes (rejected by schema validation):
 
 - `body_text`
 - Scalar recipient fields (for example, `to: "user@example.com"` instead of `to: ["user@example.com"]`)
+
+Example attachment-aware prompt flow:
+
+1. Prompt: `send my passport over email to a@b.com`
+2. Resolve type via `vaultclaw_document_types_suggest(query="passport", top_k=5)` -> `identity.passport`.
+3. Build render inputs with:
+   - `to=["a@b.com"]`
+   - `subject="Document: Passport"` (default if missing)
+   - `text_plain="Attached is my passport."` (default if missing)
+   - `document_attachments=[{"type_id":"identity.passport"}]`
+4. Render+validate Gmail plan and preflight with `vaultclaw_document_types_latest(type_id="identity.passport", subject_id="self")`.
+5. Execute only if preflight resolves.
 
 ### Plans
 
@@ -184,7 +210,7 @@ Deprecated Gmail shapes (rejected by schema validation):
 2. `vaultclaw_plan_execute(plan, plan_input?, orchestration?)`
 3. `vaultclaw_plan_run_get(run_id)`
 
-`vaultclaw_plan_validate` and `vaultclaw_plan_execute` apply the same module-hash rules per step by mutating `request_base.module_hash` when required.
+`vaultclaw_plan_validate` and `vaultclaw_plan_execute` do not inject `module_hash` into plan step `request_base` payloads.
 
 `vaultclaw_plan_execute` orchestration defaults:
 
@@ -340,6 +366,7 @@ mkdir -p ~/.openclaw/workspace/skills/vaultclaw/references
 cp -f skills/vaultclaw/SKILL.md ~/.openclaw/workspace/skills/vaultclaw/SKILL.md
 cp -f skills/vaultclaw/references/routes.google_gmail.v1.json ~/.openclaw/workspace/skills/vaultclaw/references/routes.google_gmail.v1.json
 cp -f skills/vaultclaw/references/slots.google_gmail.v1.json ~/.openclaw/workspace/skills/vaultclaw/references/slots.google_gmail.v1.json
+cp -f skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json ~/.openclaw/workspace/skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json
 ```
 
 ## Catalog Storage and Remote Defaults

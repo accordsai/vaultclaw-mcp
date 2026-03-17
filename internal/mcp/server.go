@@ -81,6 +81,7 @@ func NewServer(r io.Reader, w io.Writer) *Server {
 func (s *Server) registerTools() {
 	s.registerSessionTools()
 	s.registerConnectorTools()
+	s.registerDocumentTools()
 	s.registerPlanTools()
 	s.registerPrereqTools()
 	s.registerOrchestrationTools()
@@ -193,12 +194,19 @@ func (s *Server) handleRequest(ctx context.Context, req rpcRequest) rpcResponse 
 			resp = envelopeFailure("MCP_INTERNAL", "internal", err.Error(), false, "", map[string]any{})
 		}
 		textBytes, _ := json.Marshal(resp)
+		content := []map[string]any{{
+			"type": "text",
+			"text": string(textBytes),
+		}}
+		if summary := approvalSummaryText(resp); strings.TrimSpace(summary) != "" {
+			content = append(content, map[string]any{
+				"type": "text",
+				"text": summary,
+			})
+		}
 		return rpcResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"structuredContent": resp,
-			"content": []map[string]any{{
-				"type": "text",
-				"text": string(textBytes),
-			}},
+			"content":           content,
 		}}
 	default:
 		return rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: -32601, Message: "method not found"}}
@@ -424,4 +432,53 @@ func valueOr(v any, fallback any) any {
 		return fallback
 	}
 	return v
+}
+
+func approvalSummaryText(resp map[string]any) string {
+	if resp == nil {
+		return ""
+	}
+	ok, _ := resp["ok"].(bool)
+	if ok {
+		return ""
+	}
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil || !strings.EqualFold(strings.TrimSpace(strVal(errObj["code"])), "MCP_APPROVAL_REQUIRED") {
+		return ""
+	}
+	details, _ := errObj["details"].(map[string]any)
+	approval, _ := details["approval"].(map[string]any)
+	if approval == nil {
+		return ""
+	}
+
+	lines := []string{"Approval required before execution can continue."}
+	if kind := strings.ToUpper(strings.TrimSpace(strVal(approval["kind"]))); kind != "" {
+		lines = append(lines, "Kind: "+kind)
+	}
+	if challengeID := strings.TrimSpace(strVal(approval["challenge_id"])); challengeID != "" {
+		lines = append(lines, "Challenge ID: "+challengeID)
+	}
+	if pendingID := strings.TrimSpace(strVal(approval["pending_id"])); pendingID != "" {
+		lines = append(lines, "Pending ID: "+pendingID)
+	}
+	if url := approvalRemoteAttestationURL(approval); url != "" {
+		lines = append(lines, "Attestation URL: ["+url+"]("+url+")")
+	}
+	lines = append(lines, "Next action: call `vaultclaw_approval_wait` with the provided handle.")
+	return strings.Join(lines, "\n")
+}
+
+func approvalRemoteAttestationURL(approval map[string]any) string {
+	if approval == nil {
+		return ""
+	}
+	if url := strings.TrimSpace(strVal(approval["remote_attestation_url"])); url != "" {
+		return url
+	}
+	pending, _ := approval["pending_approval"].(map[string]any)
+	if pending == nil {
+		return ""
+	}
+	return strings.TrimSpace(strVal(pending["remote_attestation_url"]))
 }

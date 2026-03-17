@@ -237,6 +237,203 @@ func TestRenderTemplateGoogleWorkspace120PlanDefaults(t *testing.T) {
 	if req0["text_html"] != "" {
 		t.Fatalf("expected default empty text_html, got %#v", req0["text_html"])
 	}
+	if _, ok := req0["document_attachments"]; ok {
+		t.Fatalf("did not expect document_attachments in 1.2.0 payload, got %#v", req0["document_attachments"])
+	}
+}
+
+func TestRenderTemplateGoogleWorkspace130PlanDocumentAttachments(t *testing.T) {
+	store := newTestStore(t)
+	bundle := mustLoadRepoBundle(t, "google.workspace", "1.3.0")
+	if _, _, err := store.UpsertBundle(bundle, ConflictPolicyFail); err != nil {
+		t.Fatalf("upsert bundle failed: %v", err)
+	}
+
+	res, err := store.RenderTemplate("google.workspace", "gmail_tpl_plan_send_email_v1", "1.3.0", map[string]any{
+		"to":         []any{"recipient@example.com"},
+		"subject":    "Passport attached",
+		"text_plain": "Attached is my passport.",
+		"document_attachments": []any{
+			map[string]any{
+				"type_id": "identity.passport",
+			},
+		},
+	}, OutputKindAuto)
+	if err != nil {
+		t.Fatalf("RenderTemplate failed: %v", err)
+	}
+	if res.SourceRef.OutputKind != OutputKindPlan {
+		t.Fatalf("expected output_kind PLAN, got %s", res.SourceRef.OutputKind)
+	}
+	if len(res.UsedDefaults) != 3 {
+		t.Fatalf("expected defaults for cc/bcc/text_html, got %d (%v)", len(res.UsedDefaults), res.UsedDefaults)
+	}
+	steps, ok := res.Rendered["steps"].([]any)
+	if !ok || len(steps) != 2 {
+		t.Fatalf("expected two rendered steps, got %#v", res.Rendered["steps"])
+	}
+	step0 := mustMap(t, steps[0])
+	req0 := mustMap(t, step0["request_base"])
+	docAttachments, ok := req0["document_attachments"].([]any)
+	if !ok || len(docAttachments) != 1 {
+		t.Fatalf("expected one rendered document attachment, got %#v", req0["document_attachments"])
+	}
+	firstDoc := mustMap(t, docAttachments[0])
+	if firstDoc["type_id"] != "identity.passport" {
+		t.Fatalf("expected identity.passport type_id, got %#v", firstDoc["type_id"])
+	}
+}
+
+func TestRenderTemplateGoogleWorkspace130PlanDocumentAttachmentsDefault(t *testing.T) {
+	store := newTestStore(t)
+	bundle := mustLoadRepoBundle(t, "google.workspace", "1.3.0")
+	if _, _, err := store.UpsertBundle(bundle, ConflictPolicyFail); err != nil {
+		t.Fatalf("upsert bundle failed: %v", err)
+	}
+
+	res, err := store.RenderTemplate("google.workspace", "gmail_tpl_plan_send_email_v1", "1.3.0", map[string]any{
+		"to":         []any{"recipient@example.com"},
+		"subject":    "Status update",
+		"text_plain": "Everything is green.",
+	}, OutputKindAuto)
+	if err != nil {
+		t.Fatalf("RenderTemplate failed: %v", err)
+	}
+	if len(res.UsedDefaults) != 4 {
+		t.Fatalf("expected defaults for cc/bcc/text_html/document_attachments, got %d (%v)", len(res.UsedDefaults), res.UsedDefaults)
+	}
+	steps, ok := res.Rendered["steps"].([]any)
+	if !ok || len(steps) != 2 {
+		t.Fatalf("expected two rendered steps, got %#v", res.Rendered["steps"])
+	}
+	step0 := mustMap(t, steps[0])
+	req0 := mustMap(t, step0["request_base"])
+	docAttachments, ok := req0["document_attachments"].([]any)
+	if !ok {
+		t.Fatalf("expected defaulted document_attachments array, got %#v", req0["document_attachments"])
+	}
+	if len(docAttachments) != 0 {
+		t.Fatalf("expected empty defaulted document_attachments, got %#v", docAttachments)
+	}
+}
+
+func TestRenderTemplateGoogleWorkspace130DocumentAttachmentsAcrossDraftTemplates(t *testing.T) {
+	store := newTestStore(t)
+	bundle := mustLoadRepoBundle(t, "google.workspace", "1.3.0")
+	if _, _, err := store.UpsertBundle(bundle, ConflictPolicyFail); err != nil {
+		t.Fatalf("upsert bundle failed: %v", err)
+	}
+
+	cases := []struct {
+		templateID string
+		inputs     map[string]any
+	}{
+		{
+			templateID: "gmail_tpl_plan_send_email_v1",
+			inputs: map[string]any{
+				"to":         []any{"recipient@example.com"},
+				"subject":    "Doc",
+				"text_plain": "Attached",
+			},
+		},
+		{
+			templateID: "gmail_tpl_plan_create_draft_v1",
+			inputs: map[string]any{
+				"to":         []any{"recipient@example.com"},
+				"subject":    "Doc",
+				"text_plain": "Attached",
+			},
+		},
+		{
+			templateID: "gmail_tpl_plan_reply_in_thread_v1",
+			inputs: map[string]any{
+				"to":         []any{"recipient@example.com"},
+				"thread_id":  "thread_123",
+				"text_plain": "Attached",
+			},
+		},
+	}
+	for _, tc := range cases {
+		in := map[string]any{
+			"document_attachments": []any{
+				map[string]any{"type_id": "identity.passport"},
+			},
+		}
+		for k, v := range tc.inputs {
+			in[k] = v
+		}
+		res, err := store.RenderTemplate("google.workspace", tc.templateID, "1.3.0", in, OutputKindAuto)
+		if err != nil {
+			t.Fatalf("RenderTemplate(%s) failed: %v", tc.templateID, err)
+		}
+		steps, ok := res.Rendered["steps"].([]any)
+		if !ok || len(steps) == 0 {
+			t.Fatalf("expected rendered steps for %s, got %#v", tc.templateID, res.Rendered["steps"])
+		}
+		step0 := mustMap(t, steps[0])
+		req0 := mustMap(t, step0["request_base"])
+		docs, ok := req0["document_attachments"].([]any)
+		if !ok || len(docs) != 1 {
+			t.Fatalf("expected rendered document_attachments for %s, got %#v", tc.templateID, req0["document_attachments"])
+		}
+		firstDoc := mustMap(t, docs[0])
+		if firstDoc["type_id"] != "identity.passport" {
+			t.Fatalf("expected identity.passport for %s, got %#v", tc.templateID, firstDoc["type_id"])
+		}
+	}
+}
+
+func TestRenderTemplateGoogleWorkspace130MultiStepGraphLinks(t *testing.T) {
+	store := newTestStore(t)
+	bundle := mustLoadRepoBundle(t, "google.workspace", "1.3.0")
+	if _, _, err := store.UpsertBundle(bundle, ConflictPolicyFail); err != nil {
+		t.Fatalf("upsert bundle failed: %v", err)
+	}
+
+	cases := []struct {
+		templateID       string
+		inputs           map[string]any
+		expectedStepID   string
+		expectedNextStep string
+	}{
+		{
+			templateID: "gmail_tpl_plan_send_email_v1",
+			inputs: map[string]any{
+				"to":         []any{"recipient@example.com"},
+				"subject":    "Doc",
+				"text_plain": "Attached",
+			},
+			expectedStepID:   "create_draft",
+			expectedNextStep: "send_draft",
+		},
+		{
+			templateID: "gmail_tpl_plan_reply_in_thread_v1",
+			inputs: map[string]any{
+				"to":         []any{"recipient@example.com"},
+				"thread_id":  "thread_123",
+				"text_plain": "Attached",
+			},
+			expectedStepID:   "create_reply_draft",
+			expectedNextStep: "send_reply_draft",
+		},
+	}
+	for _, tc := range cases {
+		res, err := store.RenderTemplate("google.workspace", tc.templateID, "1.3.0", tc.inputs, OutputKindAuto)
+		if err != nil {
+			t.Fatalf("RenderTemplate(%s) failed: %v", tc.templateID, err)
+		}
+		steps, ok := res.Rendered["steps"].([]any)
+		if !ok || len(steps) < 2 {
+			t.Fatalf("expected multi-step rendered plan for %s, got %#v", tc.templateID, res.Rendered["steps"])
+		}
+		step0 := mustMap(t, steps[0])
+		if step0["step_id"] != tc.expectedStepID {
+			t.Fatalf("unexpected first step for %s: got=%#v want=%q", tc.templateID, step0["step_id"], tc.expectedStepID)
+		}
+		if step0["default_success_next_step_id"] != tc.expectedNextStep {
+			t.Fatalf("expected default_success_next_step_id=%q for %s, got %#v", tc.expectedNextStep, tc.templateID, step0["default_success_next_step_id"])
+		}
+	}
 }
 
 func TestRenderTemplateGoogleWorkspace120VerbDefaultBinding(t *testing.T) {

@@ -3,6 +3,8 @@ package mcp
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -110,5 +112,53 @@ func TestConfiguredClient_AutoSessionFromEnv(t *testing.T) {
 	}
 	if cfg.TimeoutMS != 12345 {
 		t.Fatalf("unexpected timeout_ms: %d", cfg.TimeoutMS)
+	}
+}
+
+func TestHandleRequest_ToolsCallAddsApprovalSummaryContent(t *testing.T) {
+	s := NewServer(strings.NewReader(""), io.Discard)
+	s.addTool(Tool{
+		Name: "test_approval_tool",
+		Handler: func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			return envelopeFailure("MCP_APPROVAL_REQUIRED", "approval", "approval decision required before execution can continue", false, "", map[string]any{
+				"approval": map[string]any{
+					"kind":                   "JOB",
+					"challenge_id":           "ach_1",
+					"pending_id":             "apj_1",
+					"remote_attestation_url": "https://alerts.accords.ai/a/req_1?t=abc",
+				},
+			}), nil
+		},
+	})
+
+	params, err := json.Marshal(map[string]any{
+		"name":      "test_approval_tool",
+		"arguments": map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	res := s.handleRequest(context.Background(), rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  params,
+	})
+	result, _ := res.Result.(map[string]any)
+	if result == nil {
+		t.Fatalf("missing result payload: %+v", res)
+	}
+	content, _ := result["content"].([]map[string]any)
+	if len(content) != 2 {
+		t.Fatalf("expected JSON + summary content entries, got=%v", result["content"])
+	}
+	jsonText := strVal(content[0]["text"])
+	if !strings.Contains(jsonText, "\"MCP_APPROVAL_REQUIRED\"") {
+		t.Fatalf("first content entry should preserve json envelope: %s", jsonText)
+	}
+	summaryText := strVal(content[1]["text"])
+	expectedLink := "[https://alerts.accords.ai/a/req_1?t=abc](https://alerts.accords.ai/a/req_1?t=abc)"
+	if !strings.Contains(summaryText, expectedLink) {
+		t.Fatalf("summary content missing markdown link: %s", summaryText)
 	}
 }

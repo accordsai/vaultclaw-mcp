@@ -1,7 +1,7 @@
 {
   "type": "vaultclaw.routing.slots.v1",
   "domain": "google.gmail",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "canonical_fields": {
     "recipients": {
       "to": "string[]",
@@ -15,7 +15,8 @@
     "message_refs": {
       "message_id": "string",
       "thread_id": "string"
-    }
+    },
+    "document_attachments": "object[]"
   },
   "normalization": {
     "recipient_scalar_to_array": true,
@@ -28,44 +29,90 @@
       "format": "metadata",
       "page_limit": 25
     },
-    "disallowed_legacy_fields": ["body_text"]
+    "disallowed_legacy_fields": [
+      "body_text"
+    ]
   },
   "intent_slots": {
     "send_email": {
-      "required": ["to", "subject", "text_plain"],
-      "optional": ["cc", "bcc", "text_html"]
+      "required": [
+        "to",
+        "subject",
+        "text_plain"
+      ],
+      "optional": [
+        "cc",
+        "bcc",
+        "text_html",
+        "document_attachments"
+      ]
     },
     "reply_email": {
-      "required": ["to", "thread_id", "text_plain"],
-      "optional": ["subject", "text_html"]
+      "required": [
+        "to",
+        "thread_id",
+        "text_plain"
+      ],
+      "optional": [
+        "subject",
+        "text_html",
+        "document_attachments"
+      ]
     },
     "create_draft": {
-      "required": ["to", "subject", "text_plain"],
-      "optional": ["cc", "bcc", "text_html"]
+      "required": [
+        "to",
+        "subject",
+        "text_plain"
+      ],
+      "optional": [
+        "cc",
+        "bcc",
+        "text_html",
+        "document_attachments"
+      ]
     },
     "trash_message": {
-      "required": ["message_id"],
+      "required": [
+        "message_id"
+      ],
       "optional": []
     },
     "untrash_message": {
-      "required": ["message_id"],
+      "required": [
+        "message_id"
+      ],
       "optional": []
     },
     "get_message_metadata": {
-      "required": ["message_id"],
-      "optional": ["format"]
+      "required": [
+        "message_id"
+      ],
+      "optional": [
+        "format"
+      ]
     },
     "get_message_content": {
-      "required": ["message_id"],
+      "required": [
+        "message_id"
+      ],
       "optional": []
     },
     "list_messages_by_label": {
       "required": [],
-      "optional": ["label", "page_limit"]
+      "optional": [
+        "label",
+        "page_limit"
+      ]
     },
     "modify_message_labels": {
-      "required": ["message_id"],
-      "optional": ["add_label_ids", "remove_label_ids"]
+      "required": [
+        "message_id"
+      ],
+      "optional": [
+        "add_label_ids",
+        "remove_label_ids"
+      ]
     },
     "list_labels": {
       "required": [],
@@ -88,5 +135,21 @@
       "ambiguous_message_or_thread_reference",
       "low_intent_confidence"
     ]
+  },
+  "attachment_contracts": {
+    "document_attachments": {
+      "type": "array",
+      "item_type": "object",
+      "required_item_keys": [
+        "type_id"
+      ],
+      "allowed_item_keys": [
+        "type_id",
+        "filename",
+        "content_type"
+      ],
+      "additional_properties": false,
+      "notes": "Only type_id, filename, and content_type are permitted."
+    }
   }
 }

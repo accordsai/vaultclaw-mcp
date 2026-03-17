@@ -247,15 +247,10 @@ func TestHandleConnectorExecuteInjectsModuleHash(t *testing.T) {
 	}
 }
 
-func TestHandlePlanExecuteInjectsModuleHash(t *testing.T) {
+func TestHandlePlanExecuteDoesNotInjectModuleHashIntoStepRequestBase(t *testing.T) {
 	postedModuleHash := ""
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v0/connectors/google":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "google",
-				"policy_hash": "ph_google",
-			})
 		case "/v0/connectors/plans/execute":
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
@@ -295,8 +290,8 @@ func TestHandlePlanExecuteInjectsModuleHash(t *testing.T) {
 	if ok, _ := resp["ok"].(bool); !ok {
 		t.Fatalf("expected success, got: %v", resp)
 	}
-	if postedModuleHash != "ph_google" {
-		t.Fatalf("expected posted module_hash=ph_google, got %s", postedModuleHash)
+	if postedModuleHash != "" {
+		t.Fatalf("did not expect module_hash in request_base, got %s", postedModuleHash)
 	}
 }
 

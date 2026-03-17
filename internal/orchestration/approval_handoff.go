@@ -163,26 +163,32 @@ func BuildApprovalRequiredError(h ApprovalHandoff) *OrchestrationError {
 	handleMap := approvalHandleMap(h.Handle)
 	requestID := strings.TrimSpace(strVal(h.Vault["request_id"]))
 	vaultStatus := numberToInt64(h.Vault["vault_http_status"])
+	attestationURL := remoteAttestationURLFromPending(h.State.PendingApproval)
+	approvalDetails := map[string]any{
+		"status":                     ApprovalStatePending,
+		"kind":                       strings.ToUpper(strings.TrimSpace(h.Handle.Kind)),
+		"job_id":                     strings.TrimSpace(h.Handle.JobID),
+		"run_id":                     strings.TrimSpace(h.Handle.RunID),
+		"challenge_id":               strings.TrimSpace(h.Handle.ChallengeID),
+		"pending_id":                 strings.TrimSpace(h.Handle.PendingID),
+		"pending_id_resolved":        strings.TrimSpace(h.Handle.PendingID) != "",
+		"pending_expires_at_unix_ms": h.State.PendingExpiresAtUnix,
+		"pending_approval":           h.State.PendingApproval,
+		"decision_outcome":           DecisionOutcomePending,
+		"next_action": map[string]any{
+			"tool":      "vaultclaw_approval_wait",
+			"arguments": map[string]any{"handle": handleMap},
+		},
+	}
+	if attestationURL != "" {
+		approvalDetails["remote_attestation_url"] = attestationURL
+		approvalDetails["remote_attestation_link_markdown"] = markdownLinkForURL(attestationURL)
+	}
 	return &OrchestrationError{
 		Code:    "MCP_APPROVAL_REQUIRED",
 		Message: "approval decision required before execution can continue",
 		Details: map[string]any{
-			"approval": map[string]any{
-				"status":                     ApprovalStatePending,
-				"kind":                       strings.ToUpper(strings.TrimSpace(h.Handle.Kind)),
-				"job_id":                     strings.TrimSpace(h.Handle.JobID),
-				"run_id":                     strings.TrimSpace(h.Handle.RunID),
-				"challenge_id":               strings.TrimSpace(h.Handle.ChallengeID),
-				"pending_id":                 strings.TrimSpace(h.Handle.PendingID),
-				"pending_id_resolved":        strings.TrimSpace(h.Handle.PendingID) != "",
-				"pending_expires_at_unix_ms": h.State.PendingExpiresAtUnix,
-				"pending_approval":           h.State.PendingApproval,
-				"decision_outcome":           DecisionOutcomePending,
-				"next_action": map[string]any{
-					"tool":      "vaultclaw_approval_wait",
-					"arguments": map[string]any{"handle": handleMap},
-				},
-			},
+			"approval":          approvalDetails,
 			"request_id":        requestID,
 			"vault_http_status": vaultStatus,
 			"vault":             h.Vault,
@@ -323,6 +329,21 @@ func pendingIDFromPending(pending map[string]any) string {
 		return ""
 	}
 	return strings.TrimSpace(strVal(pending["pending_id"]))
+}
+
+func remoteAttestationURLFromPending(pending map[string]any) string {
+	if pending == nil {
+		return ""
+	}
+	return strings.TrimSpace(strVal(pending["remote_attestation_url"]))
+}
+
+func markdownLinkForURL(raw string) string {
+	url := strings.TrimSpace(raw)
+	if url == "" {
+		return ""
+	}
+	return "[" + url + "](" + url + ")"
 }
 
 func isApprovalRequiredCode(code string) bool {

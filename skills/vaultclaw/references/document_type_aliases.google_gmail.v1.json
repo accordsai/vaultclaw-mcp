@@ -1,0 +1,28 @@
+{
+  "type": "vaultclaw.routing.document_type_aliases.v1",
+  "domain": "google.gmail",
+  "version": "1.0.0",
+  "normalization": {
+    "lowercase": true,
+    "trim_whitespace": true,
+    "collapse_internal_whitespace": true,
+    "strip_punctuation": true
+  },
+  "aliases": {
+    "passport": "identity.passport",
+    "passport document": "identity.passport",
+    "passport copy": "identity.passport",
+    "passport scan": "identity.passport",
+    "passport photo page": "identity.passport",
+    "drivers license": "identity.drivers_license",
+    "driver license": "identity.drivers_license",
+    "drivers license card": "identity.drivers_license",
+    "state id card": "identity.state_id",
+    "national id card": "identity.national_id_card",
+    "birth certificate": "identity.birth_certificate",
+    "social security card": "identity.social_security_card",
+    "green card": "identity.green_card",
+    "residence permit": "identity.residence_permit",
+    "visa document": "identity.visa"
+  }
+}

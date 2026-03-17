@@ -1,0 +1,177 @@
+{
+  "generated_at_unix_ms": 1772995721130,
+  "cookbooks": [
+    {
+      "cookbook_id": "google.workspace",
+      "version": "1.3.0",
+      "title": "Google Workspace Gmail Cookbook",
+      "description": "Canonical Gmail recipes and templates aligned with google.gmail.* connector verbs and payload shapes.",
+      "tags": [
+        "bounded",
+        "email",
+        "gmail",
+        "google",
+        "workspace"
+      ],
+      "entry_count": 12,
+      "content_hash": "30958058ba28d1921eaede5e5fb74b535d35bc3f34e7924f0030492cd6b61132",
+      "entries": [
+        {
+          "entry_id": "gmail_recipe_labels_list_v1",
+          "entry_type": "recipe.verb.v1",
+          "title": "List Gmail Labels",
+          "connector_id": "google",
+          "verb": "google.gmail.labels.list",
+          "tags": [
+            "gmail",
+            "labels",
+            "read"
+          ]
+        },
+        {
+          "entry_id": "gmail_recipe_messages_list_inbox_v1",
+          "entry_type": "recipe.verb.v1",
+          "title": "List Inbox Messages",
+          "connector_id": "google",
+          "verb": "google.gmail.messages.list",
+          "tags": [
+            "gmail",
+            "inbox",
+            "list",
+            "messages"
+          ]
+        },
+        {
+          "entry_id": "gmail_recipe_plan_send_status_update_v1",
+          "entry_type": "recipe.plan.v1",
+          "title": "Create and Send Status Update",
+          "connector_id": "google",
+          "tags": [
+            "draft",
+            "gmail",
+            "plan",
+            "send",
+            "status"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_plan_create_draft_v1",
+          "entry_type": "template.plan.v1",
+          "title": "Template: Create Draft",
+          "connector_id": "google",
+          "tags": [
+            "draft",
+            "gmail",
+            "plan",
+            "review",
+            "template"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_plan_reply_in_thread_v1",
+          "entry_type": "template.plan.v1",
+          "title": "Template: Reply in Thread",
+          "connector_id": "google",
+          "tags": [
+            "gmail",
+            "plan",
+            "reply",
+            "template",
+            "thread"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_plan_send_email_v1",
+          "entry_type": "template.plan.v1",
+          "title": "Template: Send Email",
+          "connector_id": "google",
+          "tags": [
+            "draft",
+            "gmail",
+            "plan",
+            "send",
+            "template"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_plan_trash_message_v1",
+          "entry_type": "template.plan.v1",
+          "title": "Template: Trash Message",
+          "connector_id": "google",
+          "tags": [
+            "gmail",
+            "plan",
+            "template",
+            "trash"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_plan_untrash_message_v1",
+          "entry_type": "template.plan.v1",
+          "title": "Template: Restore Trashed Message",
+          "connector_id": "google",
+          "tags": [
+            "gmail",
+            "plan",
+            "template",
+            "untrash"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_verb_messages_get_content_v1",
+          "entry_type": "template.verb.v1",
+          "title": "Template: Get Message Content",
+          "connector_id": "google",
+          "verb": "google.gmail.messages.get_content",
+          "tags": [
+            "content",
+            "gmail",
+            "messages",
+            "template"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_verb_messages_get_metadata_v1",
+          "entry_type": "template.verb.v1",
+          "title": "Template: Get Message Metadata",
+          "connector_id": "google",
+          "verb": "google.gmail.messages.get",
+          "tags": [
+            "gmail",
+            "messages",
+            "metadata",
+            "template"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_verb_messages_list_by_label_v1",
+          "entry_type": "template.verb.v1",
+          "title": "Template: List Messages by Label",
+          "connector_id": "google",
+          "verb": "google.gmail.messages.list",
+          "tags": [
+            "gmail",
+            "list",
+            "messages",
+            "query",
+            "template"
+          ]
+        },
+        {
+          "entry_id": "gmail_tpl_verb_messages_modify_labels_v1",
+          "entry_type": "template.verb.v1",
+          "title": "Template: Modify Message Labels",
+          "connector_id": "google",
+          "verb": "google.gmail.messages.modify",
+          "tags": [
+            "gmail",
+            "labels",
+            "messages",
+            "modify",
+            "template"
+          ]
+        }
+      ]
+    }
+  ]
+}

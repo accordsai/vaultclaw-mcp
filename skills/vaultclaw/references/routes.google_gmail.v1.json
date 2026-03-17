@@ -2,7 +2,7 @@
   "type": "vaultclaw.routing.routes.v1",
   "domain": "google.gmail",
   "cookbook_id": "google.workspace",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "confidence_policy": {
     "low_confidence_action": "ASK_ONE_QUESTION_THEN_CONTINUE",
     "unmapped_after_clarification_action": "ASK_DIRECT_CALL_OR_FAIL_SAFE"
@@ -12,84 +12,171 @@
       "intent": "send_email",
       "entry_id": "gmail_tpl_plan_send_email_v1",
       "entry_type": "template.plan.v1",
-      "tags": ["gmail", "template", "plan", "send", "draft"],
-      "required_slots": ["to", "subject", "text_plain"]
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "send",
+        "draft"
+      ],
+      "required_slots": [
+        "to",
+        "subject",
+        "text_plain"
+      ]
     },
     {
       "intent": "reply_email",
       "entry_id": "gmail_tpl_plan_reply_in_thread_v1",
       "entry_type": "template.plan.v1",
-      "tags": ["gmail", "template", "plan", "reply", "thread"],
-      "required_slots": ["to", "thread_id", "text_plain"]
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "reply",
+        "thread"
+      ],
+      "required_slots": [
+        "to",
+        "thread_id",
+        "text_plain"
+      ]
     },
     {
       "intent": "create_draft",
       "entry_id": "gmail_tpl_plan_create_draft_v1",
       "entry_type": "template.plan.v1",
-      "tags": ["gmail", "template", "plan", "draft", "review"],
-      "required_slots": ["to", "subject", "text_plain"]
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "draft",
+        "review"
+      ],
+      "required_slots": [
+        "to",
+        "subject",
+        "text_plain"
+      ]
     },
     {
       "intent": "trash_message",
       "entry_id": "gmail_tpl_plan_trash_message_v1",
       "entry_type": "template.plan.v1",
-      "tags": ["gmail", "template", "plan", "trash"],
-      "required_slots": ["message_id"]
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "trash"
+      ],
+      "required_slots": [
+        "message_id"
+      ]
     },
     {
       "intent": "untrash_message",
       "entry_id": "gmail_tpl_plan_untrash_message_v1",
       "entry_type": "template.plan.v1",
-      "tags": ["gmail", "template", "plan", "untrash"],
-      "required_slots": ["message_id"]
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "untrash"
+      ],
+      "required_slots": [
+        "message_id"
+      ]
     },
     {
       "intent": "get_message_metadata",
       "entry_id": "gmail_tpl_verb_messages_get_metadata_v1",
       "entry_type": "template.verb.v1",
-      "tags": ["gmail", "template", "messages", "metadata"],
-      "required_slots": ["message_id"]
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "metadata"
+      ],
+      "required_slots": [
+        "message_id"
+      ]
     },
     {
       "intent": "get_message_content",
       "entry_id": "gmail_tpl_verb_messages_get_content_v1",
       "entry_type": "template.verb.v1",
-      "tags": ["gmail", "template", "messages", "content"],
-      "required_slots": ["message_id"]
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "content"
+      ],
+      "required_slots": [
+        "message_id"
+      ]
     },
     {
       "intent": "list_messages_by_label",
       "entry_id": "gmail_tpl_verb_messages_list_by_label_v1",
       "entry_type": "template.verb.v1",
-      "tags": ["gmail", "template", "messages", "list", "query"],
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "list",
+        "query"
+      ],
       "required_slots": []
     },
     {
       "intent": "modify_message_labels",
       "entry_id": "gmail_tpl_verb_messages_modify_labels_v1",
       "entry_type": "template.verb.v1",
-      "tags": ["gmail", "template", "messages", "modify", "labels"],
-      "required_slots": ["message_id"]
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "modify",
+        "labels"
+      ],
+      "required_slots": [
+        "message_id"
+      ]
     },
     {
       "intent": "list_labels",
       "entry_id": "gmail_recipe_labels_list_v1",
       "entry_type": "recipe.verb.v1",
-      "tags": ["gmail", "labels", "read"],
+      "tags": [
+        "gmail",
+        "labels",
+        "read"
+      ],
       "required_slots": []
     },
     {
       "intent": "list_inbox",
       "entry_id": "gmail_recipe_messages_list_inbox_v1",
       "entry_type": "recipe.verb.v1",
-      "tags": ["gmail", "messages", "list", "inbox"],
+      "tags": [
+        "gmail",
+        "messages",
+        "list",
+        "inbox"
+      ],
       "required_slots": []
     },
     {
       "intent": "send_status_update",
       "entry_id": "gmail_recipe_plan_send_status_update_v1",
       "entry_type": "recipe.plan.v1",
-      "tags": ["gmail", "plan", "draft", "send", "status"],
+      "tags": [
+        "gmail",
+        "plan",
+        "draft",
+        "send",
+        "status"
+      ],
       "required_slots": []
     }
   ]

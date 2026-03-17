@@ -138,6 +138,7 @@ func (s *Server) handleApprovalsPendingList(ctx context.Context, args map[string
 	for _, row := range rows {
 		obj := cloneMap(row.Raw)
 		obj["decision_outcome"] = orchestration.DecisionOutcomeFromPending(row)
+		enrichPendingAttestationFields(obj)
 		items = append(items, obj)
 	}
 	return envelopeSuccess(map[string]any{"items": items}, map[string]any{"request_id": res.RequestID, "vault_http_status": res.StatusCode}), nil
@@ -182,6 +183,7 @@ func (s *Server) handleApprovalsPendingGet(ctx context.Context, args map[string]
 	})
 	item := cloneMap(matches[0].Raw)
 	item["decision_outcome"] = orchestration.DecisionOutcomeFromPending(matches[0])
+	enrichPendingAttestationFields(item)
 	return envelopeSuccess(map[string]any{"item": item}, map[string]any{"request_id": res.RequestID, "vault_http_status": res.StatusCode}), nil
 }
 
@@ -242,4 +244,20 @@ func cloneMap(in map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+func enrichPendingAttestationFields(item map[string]any) {
+	if item == nil {
+		return
+	}
+	url := strings.TrimSpace(strVal(item["remote_attestation_url"]))
+	if url == "" {
+		pending, _ := item["pending_approval"].(map[string]any)
+		url = strings.TrimSpace(strVal(pending["remote_attestation_url"]))
+	}
+	if url == "" {
+		return
+	}
+	item["remote_attestation_url"] = url
+	item["remote_attestation_link_markdown"] = "[" + url + "](" + url + ")"
 }

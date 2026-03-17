@@ -1,0 +1,615 @@
+{
+  "type": "accords.cookbook.bundle.v1",
+  "cookbook_id": "google.workspace",
+  "version": "1.3.0",
+  "title": "Google Workspace Gmail Cookbook",
+  "description": "Canonical Gmail recipes and templates aligned with google.gmail.* connector verbs and payload shapes.",
+  "tags": [
+    "google",
+    "gmail",
+    "workspace",
+    "bounded",
+    "email"
+  ],
+  "entries": [
+    {
+      "entry_id": "gmail_recipe_labels_list_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "List Gmail Labels",
+      "description": "List labels for the authenticated Gmail user.",
+      "tags": [
+        "gmail",
+        "labels",
+        "read"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.labels.list",
+      "policy_version": "1",
+      "request": {
+        "user_id": "me"
+      }
+    },
+    {
+      "entry_id": "gmail_recipe_messages_list_inbox_v1",
+      "entry_type": "recipe.verb.v1",
+      "title": "List Inbox Messages",
+      "description": "List inbox messages with a conservative page limit and inbox query AST.",
+      "tags": [
+        "gmail",
+        "messages",
+        "list",
+        "inbox"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.messages.list",
+      "policy_version": "1",
+      "request": {
+        "user_id": "me",
+        "page_limit": 25
+      },
+      "query_ast_v1": {
+        "pred": {
+          "field": "label",
+          "op": "eq",
+          "value": {
+            "kind": "enum",
+            "enum": "inbox"
+          }
+        }
+      }
+    },
+    {
+      "entry_id": "gmail_recipe_plan_send_status_update_v1",
+      "entry_type": "recipe.plan.v1",
+      "title": "Create and Send Status Update",
+      "description": "Create a status draft and immediately send it.",
+      "tags": [
+        "gmail",
+        "plan",
+        "draft",
+        "send",
+        "status"
+      ],
+      "plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_draft",
+        "steps": [
+          {
+            "step_id": "create_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.create",
+            "policy_version": "1",
+            "default_success_next_step_id": "send_draft",
+            "request_base": {
+              "user_id": "me",
+              "to": [
+                "ops@example.com"
+              ],
+              "subject": "Daily Status Update",
+              "text_plain": "System health is green. No incidents detected in the last 24 hours."
+            }
+          },
+          {
+            "step_id": "send_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.send",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "draft_id": "draft_placeholder"
+            },
+            "request_bindings": [
+              {
+                "path": "/draft_id",
+                "ref": {
+                  "source": "step_output",
+                  "step_id": "create_draft",
+                  "path": "/draft_id"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "entry_id": "gmail_tpl_verb_messages_get_metadata_v1",
+      "entry_type": "template.verb.v1",
+      "title": "Template: Get Message Metadata",
+      "description": "Render a metadata-safe message lookup request.",
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "metadata"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.messages.get",
+      "policy_version": "1",
+      "base_request": {
+        "connector_id": "google",
+        "verb": "google.gmail.messages.get",
+        "request": {
+          "user_id": "me",
+          "message_id": "message_placeholder",
+          "format": "metadata"
+        }
+      },
+      "bindings": [
+        {
+          "target_path": "/request/message_id",
+          "input_key": "message_id",
+          "required": true
+        },
+        {
+          "target_path": "/request/format",
+          "input_key": "format",
+          "required": false,
+          "default": "metadata"
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_verb_messages_get_content_v1",
+      "entry_type": "template.verb.v1",
+      "title": "Template: Get Message Content",
+      "description": "Render a message content retrieval request.",
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "content"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.messages.get_content",
+      "policy_version": "1",
+      "base_request": {
+        "connector_id": "google",
+        "verb": "google.gmail.messages.get_content",
+        "request": {
+          "user_id": "me",
+          "message_id": "message_placeholder"
+        }
+      },
+      "bindings": [
+        {
+          "target_path": "/request/message_id",
+          "input_key": "message_id",
+          "required": true
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_verb_messages_list_by_label_v1",
+      "entry_type": "template.verb.v1",
+      "title": "Template: List Messages by Label",
+      "description": "Render a labeled messages list request using query_ast_v1.",
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "list",
+        "query"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.messages.list",
+      "policy_version": "1",
+      "base_request": {
+        "connector_id": "google",
+        "verb": "google.gmail.messages.list",
+        "request": {
+          "user_id": "me",
+          "page_limit": 25
+        },
+        "query_ast_v1": {
+          "pred": {
+            "field": "label",
+            "op": "eq",
+            "value": {
+              "kind": "enum",
+              "enum": "inbox"
+            }
+          }
+        }
+      },
+      "bindings": [
+        {
+          "target_path": "/request/page_limit",
+          "input_key": "page_limit",
+          "required": false,
+          "default": 25
+        },
+        {
+          "target_path": "/query_ast_v1/pred/value/enum",
+          "input_key": "label",
+          "required": false,
+          "default": "inbox"
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_verb_messages_modify_labels_v1",
+      "entry_type": "template.verb.v1",
+      "title": "Template: Modify Message Labels",
+      "description": "Render a message label mutation request.",
+      "tags": [
+        "gmail",
+        "template",
+        "messages",
+        "modify",
+        "labels"
+      ],
+      "connector_id": "google",
+      "verb": "google.gmail.messages.modify",
+      "policy_version": "1",
+      "base_request": {
+        "connector_id": "google",
+        "verb": "google.gmail.messages.modify",
+        "request": {
+          "user_id": "me",
+          "message_id": "message_placeholder",
+          "add_label_ids": [],
+          "remove_label_ids": []
+        }
+      },
+      "bindings": [
+        {
+          "target_path": "/request/message_id",
+          "input_key": "message_id",
+          "required": true
+        },
+        {
+          "target_path": "/request/add_label_ids",
+          "input_key": "add_label_ids",
+          "required": false,
+          "default": []
+        },
+        {
+          "target_path": "/request/remove_label_ids",
+          "input_key": "remove_label_ids",
+          "required": false,
+          "default": []
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_send_email_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Send Email",
+      "description": "Render a create-draft then send-draft plan.",
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "send",
+        "draft"
+      ],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_draft",
+        "steps": [
+          {
+            "step_id": "create_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.create",
+            "policy_version": "1",
+            "default_success_next_step_id": "send_draft",
+            "request_base": {
+              "user_id": "me",
+              "to": [
+                "placeholder@example.com"
+              ],
+              "cc": [],
+              "bcc": [],
+              "subject": "",
+              "text_plain": "",
+              "text_html": "",
+              "document_attachments": []
+            }
+          },
+          {
+            "step_id": "send_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.send",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "draft_id": "draft_placeholder"
+            },
+            "request_bindings": [
+              {
+                "path": "/draft_id",
+                "ref": {
+                  "source": "step_output",
+                  "step_id": "create_draft",
+                  "path": "/draft_id"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/to",
+          "input_key": "to",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/cc",
+          "input_key": "cc",
+          "required": false,
+          "default": []
+        },
+        {
+          "target_path": "/steps/0/request_base/bcc",
+          "input_key": "bcc",
+          "required": false,
+          "default": []
+        },
+        {
+          "target_path": "/steps/0/request_base/subject",
+          "input_key": "subject",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/text_plain",
+          "input_key": "text_plain",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/text_html",
+          "input_key": "text_html",
+          "required": false,
+          "default": ""
+        },
+        {
+          "target_path": "/steps/0/request_base/document_attachments",
+          "input_key": "document_attachments",
+          "required": false,
+          "default": []
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_reply_in_thread_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Reply in Thread",
+      "description": "Render a thread reply plan that drafts then sends.",
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "reply",
+        "thread"
+      ],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_reply_draft",
+        "steps": [
+          {
+            "step_id": "create_reply_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.create",
+            "policy_version": "1",
+            "default_success_next_step_id": "send_reply_draft",
+            "request_base": {
+              "user_id": "me",
+              "to": [
+                "placeholder@example.com"
+              ],
+              "subject": "Re:",
+              "text_plain": "",
+              "text_html": "",
+              "thread_id": "thread_placeholder",
+              "document_attachments": []
+            }
+          },
+          {
+            "step_id": "send_reply_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.send",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "draft_id": "draft_placeholder"
+            },
+            "request_bindings": [
+              {
+                "path": "/draft_id",
+                "ref": {
+                  "source": "step_output",
+                  "step_id": "create_reply_draft",
+                  "path": "/draft_id"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/to",
+          "input_key": "to",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/subject",
+          "input_key": "subject",
+          "required": false,
+          "default": "Re:"
+        },
+        {
+          "target_path": "/steps/0/request_base/text_plain",
+          "input_key": "text_plain",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/text_html",
+          "input_key": "text_html",
+          "required": false,
+          "default": ""
+        },
+        {
+          "target_path": "/steps/0/request_base/thread_id",
+          "input_key": "thread_id",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/document_attachments",
+          "input_key": "document_attachments",
+          "required": false,
+          "default": []
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_create_draft_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Create Draft",
+      "description": "Render a single-step draft creation plan for review-first workflows.",
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "draft",
+        "review"
+      ],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "create_draft",
+        "steps": [
+          {
+            "step_id": "create_draft",
+            "connector_id": "google",
+            "verb": "google.gmail.drafts.create",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "to": [
+                "placeholder@example.com"
+              ],
+              "cc": [],
+              "bcc": [],
+              "subject": "",
+              "text_plain": "",
+              "text_html": "",
+              "document_attachments": []
+            }
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/to",
+          "input_key": "to",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/cc",
+          "input_key": "cc",
+          "required": false,
+          "default": []
+        },
+        {
+          "target_path": "/steps/0/request_base/bcc",
+          "input_key": "bcc",
+          "required": false,
+          "default": []
+        },
+        {
+          "target_path": "/steps/0/request_base/subject",
+          "input_key": "subject",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/text_plain",
+          "input_key": "text_plain",
+          "required": true
+        },
+        {
+          "target_path": "/steps/0/request_base/text_html",
+          "input_key": "text_html",
+          "required": false,
+          "default": ""
+        },
+        {
+          "target_path": "/steps/0/request_base/document_attachments",
+          "input_key": "document_attachments",
+          "required": false,
+          "default": []
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_trash_message_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Trash Message",
+      "description": "Render a one-step message trash plan.",
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "trash"
+      ],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "trash_message",
+        "steps": [
+          {
+            "step_id": "trash_message",
+            "connector_id": "google",
+            "verb": "google.gmail.messages.trash",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "message_id": "message_placeholder"
+            }
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/message_id",
+          "input_key": "message_id",
+          "required": true
+        }
+      ]
+    },
+    {
+      "entry_id": "gmail_tpl_plan_untrash_message_v1",
+      "entry_type": "template.plan.v1",
+      "title": "Template: Restore Trashed Message",
+      "description": "Render a one-step message untrash plan.",
+      "tags": [
+        "gmail",
+        "template",
+        "plan",
+        "untrash"
+      ],
+      "base_plan": {
+        "type": "connector.execution.plan.v1",
+        "start_step_id": "untrash_message",
+        "steps": [
+          {
+            "step_id": "untrash_message",
+            "connector_id": "google",
+            "verb": "google.gmail.messages.untrash",
+            "policy_version": "1",
+            "request_base": {
+              "user_id": "me",
+              "message_id": "message_placeholder"
+            }
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "target_path": "/steps/0/request_base/message_id",
+          "input_key": "message_id",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

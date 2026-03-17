@@ -52,7 +52,7 @@ func (r *moduleHashResolver) applyExecuteRequest(ctx context.Context, req map[st
 	}, nil
 }
 
-func (r *moduleHashResolver) applyPlan(ctx context.Context, plan map[string]any) (map[string]any, error) {
+func (r *moduleHashResolver) applyPlan(_ context.Context, plan map[string]any) (map[string]any, error) {
 	if plan == nil {
 		return nil, &orchestration.OrchestrationError{Code: "MCP_VALIDATION_ERROR", Message: "plan is required", Details: map[string]any{}}
 	}
@@ -78,44 +78,15 @@ func (r *moduleHashResolver) applyPlan(ctx context.Context, plan map[string]any)
 		queryASTBase, _ := step["query_ast_base"].(map[string]any)
 		ensureGoogleGmailMessagesListQueryAST(step, verb, "query_ast_base")
 		queryASTBase, _ = step["query_ast_base"].(map[string]any)
-		if strings.TrimSpace(strVal(requestBase["module_hash"])) != "" {
-			step["request_base"] = requestBase
-			if queryASTBase != nil {
-				step["query_ast_base"] = queryASTBase
-			}
-			stepsRaw[i] = step
-			continue
-		}
-		bindings := asAnySlice(step["request_bindings"])
-		need, reason := shouldAutoModuleHash(connectorID, verb, requestBase, bindings)
-		if !need {
-			step["request_base"] = requestBase
-			if queryASTBase != nil {
-				step["query_ast_base"] = queryASTBase
-			}
-			stepsRaw[i] = step
-			continue
-		}
-		policyHash, err := r.policyHashForConnector(ctx, connectorID)
-		if err != nil {
-			return nil, err
-		}
-		requestBase["module_hash"] = policyHash
 		step["request_base"] = requestBase
 		if queryASTBase != nil {
 			step["query_ast_base"] = queryASTBase
 		}
 		stepsRaw[i] = step
-		applied = append(applied, map[string]any{
-			"step_id":      strings.TrimSpace(strVal(step["step_id"])),
-			"connector_id": connectorID,
-			"verb":         verb,
-			"reason":       reason,
-			"module_hash":  policyHash,
-		})
 	}
 	plan["steps"] = stepsRaw
 	return map[string]any{
+		"note":          "module_hash is not injected into plan step request payloads",
 		"applied_count": len(applied),
 		"applied":       applied,
 	}, nil

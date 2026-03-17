@@ -39,6 +39,8 @@ var smokeToolScopes = map[string][]string{
 	"vaultclaw_connector_get":          {"connectors.get.v1"},
 	"vaultclaw_connector_execute":      {"connectors.execute.v1"},
 	"vaultclaw_connector_execute_job":  {"connectors.execute_job.v1"},
+	"vaultclaw_document_types_suggest": {"docs.types.suggest"},
+	"vaultclaw_document_types_latest":  {"docs.types.latest"},
 	"vaultclaw_plan_validate":          {"connectors.plans.execute.v1"},
 	"vaultclaw_plan_execute":           {"connectors.plans.execute.v1"},
 	"vaultclaw_plan_run_get":           {"connectors.plans.read.v1"},
