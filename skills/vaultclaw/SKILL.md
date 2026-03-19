@@ -36,9 +36,10 @@ For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
    - `vaultclaw_connector_validate` for `VERB_REQUEST`
    - `vaultclaw_plan_validate` for `PLAN`
 8. Execute only after validation succeeds.
-9. If approval is required, ask user to approve in Vaultclaw UI, then call `vaultclaw_approval_wait`.
-10. If route confidence is low, ask exactly one clarification question, then continue.
-11. If still unmapped after one clarification, ask user to choose:
+9. If approval is required (including attestation flows), ask user to approve in Vaultclaw UI, then immediately call `vaultclaw_approval_wait` using the returned handle.
+10. For approval-required flows, do not stop after surfacing approval details; wait until `vaultclaw_approval_wait` returns terminal status or timeout.
+11. If route confidence is low, ask exactly one clarification question, then continue.
+12. If still unmapped after one clarification, ask user to choose:
    - proceed with direct connector call, or
    - fail safely and stop.
 
@@ -53,8 +54,26 @@ For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
 7. Validate rendered payload.
 8. Preflight document attachment resolution before execute.
 9. Execute.
-10. If approval required, resume with `vaultclaw_approval_wait`.
+10. If approval required, call `vaultclaw_approval_wait(handle)` and wait for terminal status or timeout.
 11. Return concise summary with `cookbook_id`, `entry_id`, `version`, and applied inputs.
+
+## Approval Wait Contract
+
+When an execute call returns approval-required (`MCP_APPROVAL_REQUIRED`):
+
+1. Always surface `challenge_id` and `pending_id`.
+2. Include attestation link when present:
+   - prefer `remote_attestation_link_markdown`,
+   - otherwise render `remote_attestation_url` as clickable Markdown.
+3. Immediately call:
+   - `vaultclaw_approval_wait(handle, timeout_ms=600000, poll_interval_ms=1500)`
+4. Do not send a final completion message before wait returns:
+   - terminal outcome (`SUCCEEDED`, `DENIED`, `FAILED`, or equivalent), or
+   - timeout (`MCP_WAIT_TIMEOUT`).
+5. Always send one final user update after wait returns:
+   - success: execution completed,
+   - failure/denied: execution did not complete,
+   - timeout: still pending and can be resumed by calling `vaultclaw_approval_wait` again with the same handle.
 
 ## Intent Routing (Google Gmail)
 
