@@ -6,13 +6,22 @@ metadata: |
     "openclaw": {
       "primaryEnv": "VC_AGENT_TOKEN",
       "requires": {
-        "env": ["VC_AGENT_TOKEN", "MCPORTER_CONFIG"]
+        "env": ["VC_AGENT_TOKEN"]
       }
     }
   }
 ---
 
-For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
+For Vaultclaw requests, prefer direct `vaultclaw_*` tools. If those tools are unavailable in the host runtime, use `mcporter` compatibility mode with `accords-vaultclaw`.
+
+## Runtime Compatibility
+
+- Preferred path: direct tool calls (for example, `vaultclaw_session_configure`, `vaultclaw_plan_execute`).
+- Compatibility path: `mcporter` bridge when direct tool calls are unavailable in OpenClaw runtime.
+- Do not claim "Vaultclaw unavailable" until both paths are checked.
+- If neither path is available, return a concrete setup error listing exactly which prerequisite is missing.
+- In compatibility path, map every `vaultclaw_*` tool call to:
+  - `mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.<tool_name> --args '<json>' --output json`
 
 ## Phase-1 Routing Scope
 
@@ -27,19 +36,23 @@ For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
 
 1. Never use `gog`.
 2. Never use browser workflows for email tasks.
-3. Configure Vaultclaw session on each run:
-   `mcporter call accords-vaultclaw.vaultclaw_session_configure --args "{\"base_url\":\"http://localhost\",\"token\":\"$VC_AGENT_TOKEN\",\"timeout_ms\":20000}" --output json`
-4. Resolve route by `intent + domain` from `routes.google_gmail.v1.json` first.
-5. Verify selected entry with `vaultclaw_recipe_get` before rendering/executing.
-6. For templates, always render first with `vaultclaw_template_render`.
-7. Validate before execute:
+3. On each run, probe tool path:
+   - direct tool path available if `vaultclaw_session_status` can be called.
+   - fallback tool path available if `MCPORTER_CONFIG` is set and `mcporter` is executable.
+4. Configure Vaultclaw session on each run:
+   - direct path: `vaultclaw_session_configure({"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000})`
+   - compatibility path: `mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.vaultclaw_session_configure --args '{"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000}' --output json`
+5. Resolve route by `intent + domain` from `routes.google_gmail.v1.json` first.
+6. Verify selected entry with `vaultclaw_recipe_get` before rendering/executing (`recipe_id` must be the route `entry_id` value).
+7. For templates, always render first with `vaultclaw_template_render`.
+8. Validate before execute:
    - `vaultclaw_connector_validate` for `VERB_REQUEST`
    - `vaultclaw_plan_validate` for `PLAN`
-8. Execute only after validation succeeds.
-9. If approval is required (including attestation flows), ask user to approve in Vaultclaw UI, then immediately call `vaultclaw_approval_wait` using the returned handle.
-10. For approval-required flows, do not stop after surfacing approval details; wait until `vaultclaw_approval_wait` returns terminal status or timeout.
-11. If route confidence is low, ask exactly one clarification question, then continue.
-12. If still unmapped after one clarification, ask user to choose:
+9. Execute only after validation succeeds.
+10. If approval is required (including attestation flows), ask user to approve in Vaultclaw UI, then immediately call `vaultclaw_approval_wait` using the returned handle.
+11. For approval-required flows, do not stop after surfacing approval details; wait until `vaultclaw_approval_wait` returns terminal status or timeout.
+12. If route confidence is low, ask exactly one clarification question, then continue.
+13. If still unmapped after one clarification, ask user to choose:
    - proceed with direct connector call, or
    - fail safely and stop.
 
@@ -91,6 +104,8 @@ Use the exact route IDs in `references/routes.google_gmail.v1.json`:
 - `list_labels` -> `gmail_recipe_labels_list_v1`
 - `list_inbox` -> `gmail_recipe_messages_list_inbox_v1`
 - `send_status_update` -> `gmail_recipe_plan_send_status_update_v1`
+
+For `vaultclaw_recipe_get`, pass route `entry_id` as `recipe_id`.
 
 ## Slot and Payload Rules
 

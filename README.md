@@ -369,6 +369,36 @@ cp -f skills/vaultclaw/references/slots.google_gmail.v1.json ~/.openclaw/workspa
 cp -f skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json ~/.openclaw/workspace/skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json
 ```
 
+### OpenClaw Compatibility
+
+`accords-mcp` is a stdio MCP server and does not require `mcporter` at protocol level.
+
+OpenClaw `2026.3.1` does not accept a root `mcpServers` key in `~/.openclaw/openclaw.json` (schema validation fails with "Unrecognized key: mcpServers"). In this OpenClaw version, direct `vaultclaw_*` tool exposure requires a runtime/plugin bridge.
+
+### Recommended: Native OpenClaw Bridge Plugin (No mcporter)
+
+Install:
+
+```bash
+openclaw plugins install /Users/sam/code/accords-mcp/plugins/openclaw-vaultclaw-bridge
+openclaw plugins enable vaultclaw-openclaw-bridge
+openclaw config set plugins.entries.vaultclaw-openclaw-bridge.config.command /Users/sam/code/accords-mcp/bin/accords-mcp
+```
+
+Runtime requirements:
+
+1. Keep the Vaultclaw skill synced (section above).
+2. Keep `VC_AGENT_TOKEN` configured in OpenClaw skill env (`skills.entries.vaultclaw*.env`) or plugin env override.
+3. Keep `acpx` and approval-handoff plugin enabled for approval resume flows.
+
+### Legacy Fallback: mcporter Compatibility
+
+`config/mcporter.json` is kept as a fallback path for older setups.
+
+```bash
+mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.vaultclaw_session_status --args '{}' --output json
+```
+
 ## Catalog Storage and Remote Defaults
 
 - Catalog root default: `os.UserConfigDir()/accords-mcp/catalog`
