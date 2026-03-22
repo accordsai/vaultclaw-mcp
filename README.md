@@ -349,6 +349,98 @@ Render response shape:
 
 Use the rendered payload with existing action tools (`vaultclaw_connector_execute`, `vaultclaw_connector_execute_job`, `vaultclaw_plan_validate`, `vaultclaw_plan_execute`) when you actually want execution.
 
+### Route Resolve (`vaultclaw_route_resolve`)
+
+Deterministic NL-first resolver for Vault routing:
+
+- Primary path: registry route match + deterministic input extraction/autofill.
+- Search fallback: only when deterministic route match fails.
+- Missing required inputs return structured guidance for normal-loop recovery.
+- Weather semantic extraction supports both `weather in <location> tomorrow` and `<timeframe>'s weather in <location>` phrasing.
+
+Request:
+
+```json
+{
+  "name": "vaultclaw_route_resolve",
+  "arguments": {
+    "request_text": "send email to a@example.com about weather in boston tomorrow",
+    "options": {
+      "allow_search_fallback": true
+    },
+    "context": {
+      "facts": {
+        "weather_summary": "Tomorrow in Boston: 58F with morning showers."
+      }
+    }
+  }
+}
+```
+
+Response `data` highlights:
+
+```json
+{
+  "status": "RESOLVED_EXECUTABLE",
+  "inputs": {},
+  "missing_inputs": [],
+  "autofilled_inputs": [
+    {
+      "input_key": "text_plain",
+      "value": "Weather for boston (tomorrow): Tomorrow in Boston: 58F with morning showers.",
+      "source": "external_facts",
+      "reason": "composed body from weather facts provided by normal loop"
+    }
+  ],
+  "missing_input_guidance": [
+    {
+      "input_key": "text_plain",
+      "required_for_route": "google.gmail.send_email.v1",
+      "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+      "question": "Fetch weather details with normal tools, then retry route resolve with context.facts.weather_summary.",
+      "external_fact_request": {
+        "fact_key": "weather_summary",
+        "kind": "weather_forecast",
+        "location": "boston",
+        "timeframe": "tomorrow"
+      }
+    }
+  ],
+  "progress_hint": {
+    "mode": "AUTO_ENRICH_AND_RETRY",
+    "message": "Missing inputs can be auto-filled with normal-loop facts. Fetch facts and retry route resolve.",
+    "next_action": "RUN_FACT_TASKS_AND_RETRY_ROUTE_RESOLVE",
+    "retry_recommended": true,
+    "parallelizable": true,
+    "fact_keys": ["weather_summary"],
+    "batch_groups": ["gmail_compose_enrichment"]
+  },
+  "needs_clarification": false
+}
+```
+
+When both `subject` and `text_plain` are unresolved for Gmail compose, resolver guidance can include multiple `AUTO_RETRY_WITH_FACTS` items in the same response. Each `external_fact_request` includes:
+
+- `fact_key` (`email_subject` / `email_body`)
+- `parallelizable: true`
+- `batch_group: "gmail_compose_enrichment"`
+
+Normal-loop retrieval can resolve those facts in parallel and retry once with:
+
+- `context.facts.email_subject`
+- `context.facts.email_body`
+
+For `generic.http` routing (including search-resolved templates with required bindings), missing required inputs now return `AUTO_RETRY_WITH_FACTS` guidance too. Each missing input is emitted as a parallelizable fact request (`fact_key=<input_key>`, `batch_group="generic_http_enrichment"`), so normal-loop fetches can run concurrently and then retry once with merged `context.facts`.
+
+`progress_hint` is a machine-readable orchestration summary for `/vault` callers:
+
+- `mode`:
+  - `AUTO_ENRICH_AND_RETRY`
+  - `PARTIAL_AUTO_ENRICH_THEN_ASK_USER`
+  - `ASK_USER`
+- `next_action` gives a deterministic caller action label.
+- `fact_keys` and `batch_groups` expose what to fetch before retry.
+
 ## Vaultclaw Skill (Routing)
 
 Portable repo skill source of truth:
@@ -369,35 +461,42 @@ cp -f skills/vaultclaw/references/slots.google_gmail.v1.json ~/.openclaw/workspa
 cp -f skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json ~/.openclaw/workspace/skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json
 ```
 
-### OpenClaw Compatibility
+### OpenClaw Runtime Standard (Bridge + Approval Handoff)
 
 `accords-mcp` is a stdio MCP server and does not require `mcporter` at protocol level.
 
 OpenClaw `2026.3.1` does not accept a root `mcpServers` key in `~/.openclaw/openclaw.json` (schema validation fails with "Unrecognized key: mcpServers"). In this OpenClaw version, direct `vaultclaw_*` tool exposure requires a runtime/plugin bridge.
 
-### Recommended: Native OpenClaw Bridge Plugin (No mcporter)
-
-Install:
+Install the supported runtime path:
 
 ```bash
 openclaw plugins install /Users/sam/code/accords-mcp/plugins/openclaw-vaultclaw-bridge
 openclaw plugins enable vaultclaw-openclaw-bridge
 openclaw config set plugins.entries.vaultclaw-openclaw-bridge.config.command /Users/sam/code/accords-mcp/bin/accords-mcp
+openclaw plugins install @vaultclaw/vaultclaw-mcp-approval-handoff
+openclaw plugins enable vaultclaw-mcp-approval-handoff
 ```
 
 Runtime requirements:
 
 1. Keep the Vaultclaw skill synced (section above).
-2. Keep `VC_AGENT_TOKEN` configured in OpenClaw skill env (`skills.entries.vaultclaw*.env`) or plugin env override.
-3. Keep `acpx` and approval-handoff plugin enabled for approval resume flows.
+2. Keep `VC_AGENT_TOKEN` configured in OpenClaw skill env (`skills.entries.vaultclaw*.env`) or bridge plugin env override.
+3. Restart the gateway after plugin/config changes.
 
-### Legacy Fallback: mcporter Compatibility
+Responsibility split:
 
-`config/mcporter.json` is kept as a fallback path for older setups.
+| Component | Responsibility |
+| --- | --- |
+| `vaultclaw-openclaw-bridge` | Exposes direct `vaultclaw_*` tools in OpenClaw by bridging to `accords-mcp`. |
+| `vaultclaw-mcp-approval-handoff` | Handles `MCP_APPROVAL_REQUIRED`, waits for attestation outcome, and auto-resumes. |
 
-```bash
-mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.vaultclaw_session_status --args '{}' --output json
-```
+Troubleshooting:
+
+| Symptom | Likely Cause | Fix |
+| --- | --- | --- |
+| `vaultclaw_*` tools unavailable | Bridge plugin missing/disabled or command path not set | Re-run install block above and verify `plugins.entries.vaultclaw-openclaw-bridge.config.command`. |
+| Approval callback delayed/missing | Approval-handoff plugin missing/disabled or no active session delivery path | Enable `vaultclaw-mcp-approval-handoff`, confirm plugin logs, and restart gateway. |
+| `MCP_AUTH_UNAUTHENTICATED` / session not configured | Missing/expired `VC_AGENT_TOKEN` or Vaultclaw auth state | Refresh auth/token, run `vaultclaw_session_configure`, then retry. |
 
 ## Catalog Storage and Remote Defaults
 

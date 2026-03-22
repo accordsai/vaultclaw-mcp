@@ -12,16 +12,27 @@ metadata: |
   }
 ---
 
-For Vaultclaw requests, prefer direct `vaultclaw_*` tools. If those tools are unavailable in the host runtime, use `mcporter` compatibility mode with `accords-vaultclaw`.
+For Vaultclaw requests, use direct `vaultclaw_*` tools exposed by OpenClaw plugin id `vaultclaw-openclaw-bridge`. `mcporter` compatibility mode is deprecated and is not part of the supported runtime contract.
 
-## Runtime Compatibility
+## Runtime Standard (OpenClaw 2026.3.x)
 
-- Preferred path: direct tool calls (for example, `vaultclaw_session_configure`, `vaultclaw_plan_execute`).
-- Compatibility path: `mcporter` bridge when direct tool calls are unavailable in OpenClaw runtime.
-- Do not claim "Vaultclaw unavailable" until both paths are checked.
-- If neither path is available, return a concrete setup error listing exactly which prerequisite is missing.
-- In compatibility path, map every `vaultclaw_*` tool call to:
-  - `mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.<tool_name> --args '<json>' --output json`
+- Required runtime path: direct `vaultclaw_*` tool calls through plugin id `vaultclaw-openclaw-bridge`.
+- Required companion plugin: `vaultclaw-mcp-approval-handoff` for approval wait and auto-resume.
+- Required auth env: `VC_AGENT_TOKEN`.
+- Do not attempt alternate execution paths when direct tools are unavailable.
+
+### Deterministic Setup Error Contract
+
+If `vaultclaw_session_status` is unavailable or direct `vaultclaw_*` tools are missing, return this setup error and stop:
+
+1. `openclaw plugins install /Users/sam/code/accords-mcp/plugins/openclaw-vaultclaw-bridge`
+2. `openclaw plugins enable vaultclaw-openclaw-bridge`
+3. `openclaw config set plugins.entries.vaultclaw-openclaw-bridge.config.command /Users/sam/code/accords-mcp/bin/accords-mcp`
+4. `openclaw plugins install @vaultclaw/vaultclaw-mcp-approval-handoff`
+5. `openclaw plugins enable vaultclaw-mcp-approval-handoff`
+6. Restart gateway/session and retry.
+
+Do not fallback to `mcporter`.
 
 ## Phase-1 Routing Scope
 
@@ -36,12 +47,9 @@ For Vaultclaw requests, prefer direct `vaultclaw_*` tools. If those tools are un
 
 1. Never use `gog`.
 2. Never use browser workflows for email tasks.
-3. On each run, probe tool path:
-   - direct tool path available if `vaultclaw_session_status` can be called.
-   - fallback tool path available if `MCPORTER_CONFIG` is set and `mcporter` is executable.
-4. Configure Vaultclaw session on each run:
-   - direct path: `vaultclaw_session_configure({"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000})`
-   - compatibility path: `mcporter --config "$MCPORTER_CONFIG" call accords-vaultclaw.vaultclaw_session_configure --args '{"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000}' --output json`
+3. On each run, verify direct tool path by calling `vaultclaw_session_status`.
+4. Configure Vaultclaw session on each run via direct tools:
+   - `vaultclaw_session_configure({"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000})`
 5. Resolve route by `intent + domain` from `routes.google_gmail.v1.json` first.
 6. Verify selected entry with `vaultclaw_recipe_get` before rendering/executing (`recipe_id` must be the route `entry_id` value).
 7. For templates, always render first with `vaultclaw_template_render`.
@@ -55,6 +63,7 @@ For Vaultclaw requests, prefer direct `vaultclaw_*` tools. If those tools are un
 13. If still unmapped after one clarification, ask user to choose:
    - proceed with direct connector call, or
    - fail safely and stop.
+14. If `vaultclaw_route_resolve` returns multiple `missing_input_guidance` items with `resolution_mode=AUTO_RETRY_WITH_FACTS` and `external_fact_request.parallelizable=true`, resolve all requested facts in parallel, then retry route resolution once with all facts merged into `context.facts`.
 
 ## Canonical Pipeline
 
@@ -69,6 +78,14 @@ For Vaultclaw requests, prefer direct `vaultclaw_*` tools. If those tools are un
 9. Execute.
 10. If approval required, call `vaultclaw_approval_wait(handle)` and wait for terminal status or timeout.
 11. Return concise summary with `cookbook_id`, `entry_id`, `version`, and applied inputs.
+
+Parallel fact enrichment contract:
+
+1. If route resolve returns multiple `AUTO_RETRY_WITH_FACTS` items, treat them as a batch.
+2. Resolve all fact requests concurrently when `external_fact_request.parallelizable=true`.
+3. Retry `vaultclaw_route_resolve` once with merged facts (for example `weather_summary`, `email_subject`, `email_body`).
+4. Only ask the user if unresolved required inputs remain after that retry.
+5. For `generic.http` missing inputs, preserve the emitted `fact_key` names directly (for example `url`, `api_key`) in `context.facts` on retry.
 
 ## Approval Wait Contract
 

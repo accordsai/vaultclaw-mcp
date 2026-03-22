@@ -19,6 +19,48 @@ type ToolDescriptor = {
   inputSchema?: unknown;
 };
 
+const BOOTSTRAP_TOOL_NAMES = [
+  "vaultclaw_approval_wait",
+  "vaultclaw_approvals_pending_get",
+  "vaultclaw_approvals_pending_list",
+  "vaultclaw_catalog_source_delete",
+  "vaultclaw_catalog_source_upsert",
+  "vaultclaw_catalog_sources_list",
+  "vaultclaw_connector_execute",
+  "vaultclaw_connector_execute_job",
+  "vaultclaw_connector_get",
+  "vaultclaw_connector_validate",
+  "vaultclaw_connectors_list",
+  "vaultclaw_cookbook_delete",
+  "vaultclaw_cookbook_export",
+  "vaultclaw_cookbook_get",
+  "vaultclaw_cookbook_import",
+  "vaultclaw_cookbook_remote_install",
+  "vaultclaw_cookbook_upsert",
+  "vaultclaw_cookbooks_list",
+  "vaultclaw_cookbooks_remote_list",
+  "vaultclaw_document_types_latest",
+  "vaultclaw_document_types_suggest",
+  "vaultclaw_job_get",
+  "vaultclaw_plan_execute",
+  "vaultclaw_plan_run_get",
+  "vaultclaw_plan_unbounded_profile_preview",
+  "vaultclaw_plan_validate",
+  "vaultclaw_recipe_get",
+  "vaultclaw_recipes_search",
+  "vaultclaw_route_resolve",
+  "vaultclaw_session_clear",
+  "vaultclaw_session_configure",
+  "vaultclaw_session_status",
+  "vaultclaw_slot_bind",
+  "vaultclaw_slot_bindings_list",
+  "vaultclaw_template_render",
+  "vaultclaw_unbounded_profile_get",
+  "vaultclaw_unbounded_profile_resolve",
+  "vaultclaw_unbounded_profile_upsert",
+  "vaultclaw_unbounded_profiles_list",
+] as const;
+
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -555,6 +597,39 @@ function toToolLabel(name: string): string {
   return name.replace(/^vaultclaw_/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function registerBridgeTool(params: {
+  api: OpenClawPluginApi;
+  cfg: BridgePluginConfig;
+  tool: ToolDescriptor;
+}) {
+  const { api, cfg, tool } = params;
+  api.registerTool(
+    {
+      name: tool.name,
+      label: toToolLabel(tool.name),
+      description: tool.description ?? `Vaultclaw tool ${tool.name}`,
+      parameters: normalizeToolSchema(tool.inputSchema),
+      async execute(_toolCallId: string, toolParams: Record<string, unknown>) {
+        const result = await withMcpClient({
+          api,
+          cfg,
+          run: async (client) =>
+            await client.request(
+              "tools/call",
+              {
+                name: tool.name,
+                arguments: toolParams ?? {},
+              },
+              cfg.callTimeoutMs,
+            ),
+        });
+        return toToolResult(result, tool.name);
+      },
+    },
+    { name: tool.name },
+  );
+}
+
 const plugin = {
   id: "vaultclaw-openclaw-bridge",
   name: "Vaultclaw OpenClaw Bridge",
@@ -574,79 +649,69 @@ const plugin = {
       callTimeoutMs: { label: "Tool Call Timeout (ms)" },
     },
   },
-  async register(api: OpenClawPluginApi) {
+  register(api: OpenClawPluginApi) {
     const cfg = normalizePluginConfig(api.pluginConfig);
     if (!cfg.enabled) {
       api.logger.info("[vaultclaw-bridge] disabled by config");
       return;
     }
-
-    let tools: ToolDescriptor[] = [];
-    try {
-      const listed = await withMcpClient({
+    const registered = new Set<string>();
+    for (const name of BOOTSTRAP_TOOL_NAMES) {
+      registerBridgeTool({
         api,
         cfg,
-        run: async (client) => {
-          const result = await client.request("tools/list", {}, cfg.callTimeoutMs);
-          const record = asRecord(result);
-          const rawTools = Array.isArray(record?.tools) ? record.tools : [];
-          return rawTools;
-        },
+        tool: { name },
       });
-      tools = listed
-        .map((item) => {
+      registered.add(name);
+    }
+    api.logger.info(`[vaultclaw-bridge] registered ${registered.size} bootstrap Vaultclaw tools`);
+
+    // Discover any additional tools exposed by accords-mcp and register them lazily.
+    void (async () => {
+      try {
+        const listed = await withMcpClient({
+          api,
+          cfg,
+          run: async (client) => {
+            const result = await client.request("tools/list", {}, cfg.callTimeoutMs);
+            const record = asRecord(result);
+            const rawTools = Array.isArray(record?.tools) ? record.tools : [];
+            return rawTools;
+          },
+        });
+        let extraCount = 0;
+        for (const item of listed) {
           const record = asRecord(item);
           if (!record) {
-            return null;
+            continue;
           }
           const name = readString(record.name);
-          if (!name) {
-            return null;
+          if (!name || !name.startsWith("vaultclaw_") || registered.has(name)) {
+            continue;
           }
-          return {
-            name,
-            description: readString(record.description),
-            inputSchema: record.inputSchema,
-          } satisfies ToolDescriptor;
-        })
-        .filter((item): item is ToolDescriptor => Boolean(item))
-        .filter((item) => item.name.startsWith("vaultclaw_"));
-    } catch (error) {
-      api.logger.warn(
-        `[vaultclaw-bridge] failed to discover tools: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
-    }
-
-    for (const tool of tools) {
-      api.registerTool(
-        {
-          name: tool.name,
-          label: toToolLabel(tool.name),
-          description: tool.description ?? `Vaultclaw tool ${tool.name}`,
-          parameters: normalizeToolSchema(tool.inputSchema),
-          async execute(_toolCallId: string, params: Record<string, unknown>) {
-            const result = await withMcpClient({
-              api,
-              cfg,
-              run: async (client) =>
-                await client.request(
-                  "tools/call",
-                  {
-                    name: tool.name,
-                    arguments: params ?? {},
-                  },
-                  cfg.callTimeoutMs,
-                ),
-            });
-            return toToolResult(result, tool.name);
-          },
-        },
-        { name: tool.name },
-      );
-    }
-
-    api.logger.info(`[vaultclaw-bridge] registered ${tools.length} Vaultclaw tools`);
+          registerBridgeTool({
+            api,
+            cfg,
+            tool: {
+              name,
+              description: readString(record.description),
+              inputSchema: record.inputSchema,
+            },
+          });
+          registered.add(name);
+          extraCount += 1;
+        }
+        if (extraCount > 0) {
+          api.logger.info(
+            `[vaultclaw-bridge] registered ${extraCount} additional Vaultclaw tools (total ${registered.size})`,
+          );
+        }
+      } catch (error) {
+        api.logger.warn(
+          `[vaultclaw-bridge] failed to discover additional tools: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    })();
   },
 };
 
