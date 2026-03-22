@@ -1,0 +1,20 @@
+{
+  "name": "@vaultclaw/vaultclaw-openclaw-bridge",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin that exposes vaultclaw_* tools by bridging to accords-mcp over stdio MCP.",
+  "type": "module",
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.41",
+    "openclaw": "^2026.3.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

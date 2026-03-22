@@ -322,6 +322,10 @@ Required scenario matrix:
 - mixed plan only orchestrates `generic.http` steps
 - auto-create profile path and failure path documented/tested where applicable
 
+4. NL robustness for semantic missing-input enrichment (when relevant):
+- cover at least 2 paraphrases for each semantic fact request path (for example `weather in <location> tomorrow` and `tomorrow's weather in <location>`)
+- assert emitted `missing_input_guidance.external_fact_request` fields remain stable (`fact_key`, semantic parameters such as `location`/`timeframe`, and `parallelizable`)
+
 ### Smoke Test Requirements
 
 Required scenario matrix:
@@ -471,4 +475,3 @@ Return:
 1. No forced rewrite of existing cookbook assets.
 2. Apply this standard whenever a bundle is touched.
 3. If an existing bundle violates this standard but behavior is intentional, document the exception in the PR.
-

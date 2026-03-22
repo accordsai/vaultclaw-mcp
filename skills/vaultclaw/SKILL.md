@@ -6,13 +6,33 @@ metadata: |
     "openclaw": {
       "primaryEnv": "VC_AGENT_TOKEN",
       "requires": {
-        "env": ["VC_AGENT_TOKEN", "MCPORTER_CONFIG"]
+        "env": ["VC_AGENT_TOKEN"]
       }
     }
   }
 ---
 
-For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
+For Vaultclaw requests, use direct `vaultclaw_*` tools exposed by OpenClaw plugin id `vaultclaw-openclaw-bridge`. `mcporter` compatibility mode is deprecated and is not part of the supported runtime contract.
+
+## Runtime Standard (OpenClaw 2026.3.x)
+
+- Required runtime path: direct `vaultclaw_*` tool calls through plugin id `vaultclaw-openclaw-bridge`.
+- Required companion plugin: `vaultclaw-mcp-approval-handoff` for approval wait and auto-resume.
+- Required auth env: `VC_AGENT_TOKEN`.
+- Do not attempt alternate execution paths when direct tools are unavailable.
+
+### Deterministic Setup Error Contract
+
+If `vaultclaw_session_status` is unavailable or direct `vaultclaw_*` tools are missing, return this setup error and stop:
+
+1. `openclaw plugins install /Users/sam/code/accords-mcp/plugins/openclaw-vaultclaw-bridge`
+2. `openclaw plugins enable vaultclaw-openclaw-bridge`
+3. `openclaw config set plugins.entries.vaultclaw-openclaw-bridge.config.command /Users/sam/code/accords-mcp/bin/accords-mcp`
+4. `openclaw plugins install @vaultclaw/vaultclaw-mcp-approval-handoff`
+5. `openclaw plugins enable vaultclaw-mcp-approval-handoff`
+6. Restart gateway/session and retry.
+
+Do not fallback to `mcporter`.
 
 ## Phase-1 Routing Scope
 
@@ -27,21 +47,23 @@ For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
 
 1. Never use `gog`.
 2. Never use browser workflows for email tasks.
-3. Configure Vaultclaw session on each run:
-   `mcporter call accords-vaultclaw.vaultclaw_session_configure --args "{\"base_url\":\"http://localhost\",\"token\":\"$VC_AGENT_TOKEN\",\"timeout_ms\":20000}" --output json`
-4. Resolve route by `intent + domain` from `routes.google_gmail.v1.json` first.
-5. Verify selected entry with `vaultclaw_recipe_get` before rendering/executing.
-6. For templates, always render first with `vaultclaw_template_render`.
-7. Validate before execute:
+3. On each run, verify direct tool path by calling `vaultclaw_session_status`.
+4. Configure Vaultclaw session on each run via direct tools:
+   - `vaultclaw_session_configure({"base_url":"http://localhost","token":"$VC_AGENT_TOKEN","timeout_ms":20000})`
+5. Resolve route by `intent + domain` from `routes.google_gmail.v1.json` first.
+6. Verify selected entry with `vaultclaw_recipe_get` before rendering/executing (`recipe_id` must be the route `entry_id` value).
+7. For templates, always render first with `vaultclaw_template_render`.
+8. Validate before execute:
    - `vaultclaw_connector_validate` for `VERB_REQUEST`
    - `vaultclaw_plan_validate` for `PLAN`
-8. Execute only after validation succeeds.
-9. If approval is required (including attestation flows), ask user to approve in Vaultclaw UI, then immediately call `vaultclaw_approval_wait` using the returned handle.
-10. For approval-required flows, do not stop after surfacing approval details; wait until `vaultclaw_approval_wait` returns terminal status or timeout.
-11. If route confidence is low, ask exactly one clarification question, then continue.
-12. If still unmapped after one clarification, ask user to choose:
+9. Execute only after validation succeeds.
+10. If approval is required (including attestation flows), ask user to approve in Vaultclaw UI, then immediately call `vaultclaw_approval_wait` using the returned handle.
+11. For approval-required flows, do not stop after surfacing approval details; wait until `vaultclaw_approval_wait` returns terminal status or timeout.
+12. If route confidence is low, ask exactly one clarification question, then continue.
+13. If still unmapped after one clarification, ask user to choose:
    - proceed with direct connector call, or
    - fail safely and stop.
+14. If `vaultclaw_route_resolve` returns multiple `missing_input_guidance` items with `resolution_mode=AUTO_RETRY_WITH_FACTS` and `external_fact_request.parallelizable=true`, resolve all requested facts in parallel, then retry route resolution once with all facts merged into `context.facts`.
 
 ## Canonical Pipeline
 
@@ -56,6 +78,14 @@ For Vaultclaw requests, use `mcporter` + `accords-vaultclaw` MCP only.
 9. Execute.
 10. If approval required, call `vaultclaw_approval_wait(handle)` and wait for terminal status or timeout.
 11. Return concise summary with `cookbook_id`, `entry_id`, `version`, and applied inputs.
+
+Parallel fact enrichment contract:
+
+1. If route resolve returns multiple `AUTO_RETRY_WITH_FACTS` items, treat them as a batch.
+2. Resolve all fact requests concurrently when `external_fact_request.parallelizable=true`.
+3. Retry `vaultclaw_route_resolve` once with merged facts (for example `weather_summary`, `email_subject`, `email_body`).
+4. Only ask the user if unresolved required inputs remain after that retry.
+5. For `generic.http` missing inputs, preserve the emitted `fact_key` names directly (for example `url`, `api_key`) in `context.facts` on retry.
 
 ## Approval Wait Contract
 
@@ -91,6 +121,8 @@ Use the exact route IDs in `references/routes.google_gmail.v1.json`:
 - `list_labels` -> `gmail_recipe_labels_list_v1`
 - `list_inbox` -> `gmail_recipe_messages_list_inbox_v1`
 - `send_status_update` -> `gmail_recipe_plan_send_status_update_v1`
+
+For `vaultclaw_recipe_get`, pass route `entry_id` as `recipe_id`.
 
 ## Slot and Payload Rules
 

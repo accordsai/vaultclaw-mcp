@@ -1,0 +1,79 @@
+{
+  "id": "vaultclaw-openclaw-bridge",
+  "name": "Vaultclaw OpenClaw Bridge",
+  "description": "Expose vaultclaw_* tools directly in OpenClaw by bridging to accords-mcp over stdio MCP.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "command": {
+        "type": "string",
+        "default": "accords-mcp"
+      },
+      "args": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "env": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {}
+      },
+      "skillEnvOrder": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "vaultclaw",
+          "vaultclaw_google"
+        ]
+      },
+      "startupTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 15000
+      },
+      "callTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 300000,
+        "default": 45000
+      }
+    }
+  },
+  "uiHints": {
+    "enabled": {
+      "label": "Enable Bridge"
+    },
+    "command": {
+      "label": "accords-mcp Command"
+    },
+    "args": {
+      "label": "Command Args"
+    },
+    "env": {
+      "label": "Environment Overrides"
+    },
+    "skillEnvOrder": {
+      "label": "Skill Env Sources"
+    },
+    "startupTimeoutMs": {
+      "label": "Startup Timeout (ms)"
+    },
+    "callTimeoutMs": {
+      "label": "Tool Call Timeout (ms)"
+    }
+  }
+}

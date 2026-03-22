@@ -88,6 +88,7 @@ func (s *Server) registerTools() {
 	s.registerApprovalTools()
 	s.registerWaitTools()
 	s.registerCatalogTools()
+	s.registerRoutingTools()
 	s.registerCatalogRemoteTools()
 }
 
