@@ -100,7 +100,7 @@ func TestConfiguredClient_AutoSessionFromEnv(t *testing.T) {
 	t.Setenv("VC_TIMEOUT_MS", "12345")
 
 	s := NewServer(strings.NewReader(""), io.Discard)
-	_, cfg, _, ok := s.configuredClient()
+	_, cfg, _, ok := s.configuredClient(context.Background())
 	if !ok {
 		t.Fatalf("expected configuredClient to auto-configure from env")
 	}

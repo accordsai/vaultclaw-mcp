@@ -80,7 +80,7 @@ func (s *Server) handleSlotBindingsList(ctx context.Context, args map[string]any
 	if boolArg(args, "include_revoked", false) {
 		q["include_revoked"] = "true"
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -100,7 +100,7 @@ func (s *Server) handleSlotBind(ctx context.Context, args map[string]any) (map[s
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "connector_id, verb, slot, secret_id are required", false, "", map[string]any{}), nil
 	}
 	body := map[string]any{"connector_id": connectorID, "verb": verb, "slot": slot, "secret_id": secretID}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -124,7 +124,7 @@ func (s *Server) handleUnboundedProfilesList(ctx context.Context, args map[strin
 	if boolArg(args, "include_revoked", false) {
 		q["include_revoked"] = "true"
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -140,7 +140,7 @@ func (s *Server) handleUnboundedProfileGet(ctx context.Context, args map[string]
 	if profileID == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "profile_id is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -156,7 +156,7 @@ func (s *Server) handleUnboundedProfileUpsert(ctx context.Context, args map[stri
 	if profile == nil {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "profile is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

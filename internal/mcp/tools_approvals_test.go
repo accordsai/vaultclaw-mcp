@@ -15,7 +15,7 @@ func newConfiguredMCPServer(t *testing.T, baseURL string) *Server {
 	t.Setenv("VC_UNIX_SOCKET", "")
 	t.Setenv("VAULT_UNIX_SOCKET", "")
 	s := NewServer(strings.NewReader(""), io.Discard)
-	s.session.set(SessionConfig{BaseURL: baseURL, Token: "token", TimeoutMS: 2000})
+	s.sessions.set(defaultSessionScope, SessionConfig{BaseURL: baseURL, Token: "token", TimeoutMS: 2000})
 	return s
 }
 

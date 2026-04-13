@@ -67,7 +67,7 @@ func (s *Server) handleJobGet(ctx context.Context, args map[string]any) (map[str
 	if jobID == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "job_id is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -125,7 +125,7 @@ func (s *Server) handleApprovalsPendingList(ctx context.Context, args map[string
 	if v := strings.TrimSpace(strArg(args, "challenge_id")); v != "" {
 		query["challenge_id"] = v
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -150,7 +150,7 @@ func (s *Server) handleApprovalsPendingGet(ctx context.Context, args map[string]
 	if challengeID == "" || pendingID == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "challenge_id and pending_id are required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

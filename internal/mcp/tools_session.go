@@ -34,7 +34,7 @@ func (s *Server) registerSessionTools() {
 	})
 }
 
-func (s *Server) handleSessionConfigure(_ context.Context, args map[string]any) (map[string]any, error) {
+func (s *Server) handleSessionConfigure(ctx context.Context, args map[string]any) (map[string]any, error) {
 	token := strings.TrimSpace(strArg(args, "token"))
 	if token == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "token is required", false, "", map[string]any{}), nil
@@ -47,7 +47,8 @@ func (s *Server) handleSessionConfigure(_ context.Context, args map[string]any) 
 	if timeout <= 0 {
 		timeout = 20000
 	}
-	s.session.set(SessionConfig{BaseURL: baseURL, Token: token, TimeoutMS: timeout})
+	scope := sessionScopeFromContext(ctx)
+	s.sessions.set(scope, SessionConfig{BaseURL: baseURL, Token: token, TimeoutMS: timeout})
 	masked := "***"
 	if len(token) >= 6 {
 		masked = token[:3] + "***" + token[len(token)-3:]
@@ -60,11 +61,12 @@ func (s *Server) handleSessionConfigure(_ context.Context, args map[string]any) 
 	}, nil), nil
 }
 
-func (s *Server) handleSessionStatus(_ context.Context, _ map[string]any) (map[string]any, error) {
-	cfg, ok := s.session.get()
+func (s *Server) handleSessionStatus(ctx context.Context, _ map[string]any) (map[string]any, error) {
+	scope := sessionScopeFromContext(ctx)
+	cfg, ok := s.sessions.get(scope)
 	if !ok {
 		if envCfg, envOK := sessionConfigFromEnv(); envOK {
-			s.session.set(envCfg)
+			s.sessions.set(scope, envCfg)
 			cfg = envCfg
 			ok = true
 		}
@@ -84,8 +86,8 @@ func (s *Server) handleSessionStatus(_ context.Context, _ map[string]any) (map[s
 	}, nil), nil
 }
 
-func (s *Server) handleSessionClear(_ context.Context, _ map[string]any) (map[string]any, error) {
-	s.session.clear()
+func (s *Server) handleSessionClear(ctx context.Context, _ map[string]any) (map[string]any, error) {
+	s.sessions.clear(sessionScopeFromContext(ctx))
 	return envelopeSuccess(map[string]any{"cleared": true}, nil), nil
 }
 

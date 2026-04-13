@@ -51,7 +51,7 @@ func (s *Server) handleDocumentTypesSuggest(ctx context.Context, args map[string
 	if topK <= 0 {
 		topK = 5
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -74,7 +74,7 @@ func (s *Server) handleDocumentTypesLatest(ctx context.Context, args map[string]
 	if subjectID == "" {
 		subjectID = "self"
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

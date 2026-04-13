@@ -43,7 +43,7 @@ func (s *Server) handleUnboundedProfileResolve(ctx context.Context, args map[str
 	}
 	autoCreate := boolArg(args, "auto_create", true)
 
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -65,7 +65,7 @@ func (s *Server) handlePlanUnboundedProfilePreview(ctx context.Context, args map
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "plan is required", false, "", map[string]any{}), nil
 	}
 	planInput := args["plan_input"]
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

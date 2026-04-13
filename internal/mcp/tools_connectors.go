@@ -61,7 +61,7 @@ func (s *Server) registerConnectorTools() {
 }
 
 func (s *Server) handleConnectorsList(ctx context.Context, _ map[string]any) (map[string]any, error) {
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -77,7 +77,7 @@ func (s *Server) handleConnectorGet(ctx context.Context, args map[string]any) (m
 	if connectorID == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "connector_id is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -93,7 +93,7 @@ func (s *Server) handleConnectorValidate(ctx context.Context, args map[string]an
 	if req == nil {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "request is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -118,7 +118,7 @@ func (s *Server) handleConnectorExecute(ctx context.Context, args map[string]any
 	if req == nil {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "request is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -146,7 +146,7 @@ func (s *Server) handleConnectorExecuteJob(ctx context.Context, args map[string]
 		AutoCreateProfiles: boolArg(orchRaw, "auto_create_profiles", true),
 	}
 
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

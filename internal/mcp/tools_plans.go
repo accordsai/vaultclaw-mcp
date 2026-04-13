@@ -50,7 +50,7 @@ func (s *Server) handlePlanValidate(ctx context.Context, args map[string]any) (m
 	if plan == nil {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "plan is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -76,7 +76,7 @@ func (s *Server) handlePlanExecute(ctx context.Context, args map[string]any) (ma
 		AutoCreateProfiles: boolArg(orchRaw, "auto_create_profiles", true),
 	}
 
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
@@ -133,7 +133,7 @@ func (s *Server) handlePlanRunGet(ctx context.Context, args map[string]any) (map
 	if runID == "" {
 		return envelopeFailure("MCP_VALIDATION_ERROR", "validation", "run_id is required", false, "", map[string]any{}), nil
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}

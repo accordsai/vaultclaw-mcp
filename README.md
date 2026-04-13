@@ -1,10 +1,11 @@
 # accords-mcp (Plans 1 + 2 + 3)
 
-Go `stdio` MCP server for Vaultclaw actions plus local cookbook/template catalog rendering and remote pull install.
+Go MCP server for Vaultclaw actions plus local cookbook/template catalog rendering and remote pull install.
 
 ## What This Implements
 
-- `stdio`-only MCP server.
+- `stdio` MCP server (default mode).
+- Optional HTTP bridge mode for shared runtime deployment.
 - Token-only session configuration (no passphrase handling).
 - Connector tools: list/get/validate/execute/execute-job.
 - Document helper tools: suggest/latest for Vaultclaw document types.
@@ -31,7 +32,7 @@ Go `stdio` MCP server for Vaultclaw actions plus local cookbook/template catalog
 - Approval signing or decision submission.
 - Vault init/unlock/lock.
 - Remote cookbook publish/post APIs.
-- HTTP MCP transport.
+- Bidirectional streaming transports beyond stdio and request/response HTTP.
 
 ## Build and Run
 
@@ -40,6 +41,33 @@ go run ./cmd/accords-mcp
 ```
 
 This starts an MCP server over stdin/stdout.
+
+HTTP mode (for singleton deployment):
+
+```bash
+ACCORDS_MCP_HTTP_ADDR=:8080 ACCORDS_MCP_HTTP_PATH=/v1/mcp go run ./cmd/accords-mcp
+```
+
+This serves JSON-RPC over HTTP `POST /v1/mcp` (alias: `/mcp`) and health endpoints (`/healthz`, `/v1/healthz`).
+
+Singleton HTTP session scoping:
+
+- `vaultclaw_session_configure`, `vaultclaw_session_status`, and `vaultclaw_session_clear` are scoped per HTTP request tenant key.
+- Strict tenant-header mode env: `ACCORDS_MCP_HTTP_REQUIRE_TENANT_HEADER` (default: `false`).
+- Scope resolution order (first non-empty header wins):
+  1. `X-Accords-Tenant-Id` (primary header)
+  2. `X-OpenClaw-Tenant-Id` (optional compatibility header)
+  3. `X-Tenant-Id` (optional compatibility header)
+  4. fallback: `default` (only when strict mode is off)
+- Behavior matrix:
+  - Strict mode `false` (default): missing tenant header falls back to `default` scope.
+  - Strict mode `true`: missing tenant header is rejected with HTTP `400` and envelope error code `MCP_TENANT_HEADER_REQUIRED`; no fallback to `default`.
+  - Header present in either mode: existing header precedence above is preserved.
+- Strict-mode rejection envelope shape:
+  - `ok=false`
+  - `error.code="MCP_TENANT_HEADER_REQUIRED"`
+  - `error.category="validation"`
+- `stdio` mode always uses the `default` scope.
 
 ## Cookbook Authoring Standard
 
@@ -93,6 +121,11 @@ On failures:
 1. `vaultclaw_session_configure(base_url, token, timeout_ms?)`
 2. `vaultclaw_session_status()`
 3. `vaultclaw_session_clear()`
+
+Scope behavior:
+
+- In HTTP mode, session tools operate on the resolved request scope (header-based, see singleton HTTP session scoping above).
+- In stdio mode, session tools operate on the `default` scope.
 
 Example:
 
@@ -463,7 +496,7 @@ cp -f skills/vaultclaw/references/document_type_aliases.google_gmail.v1.json ~/.
 
 ### OpenClaw Runtime Standard (Bridge + Approval Handoff)
 
-`accords-mcp` is a stdio MCP server and does not require `mcporter` at protocol level.
+`accords-mcp` defaults to stdio MCP mode and does not require `mcporter` at protocol level.
 
 OpenClaw `2026.3.1` does not accept a root `mcpServers` key in `~/.openclaw/openclaw.json` (schema validation fails with "Unrecognized key: mcpServers"). In this OpenClaw version, direct `vaultclaw_*` tool exposure requires a runtime/plugin bridge.
 

@@ -30,33 +30,67 @@ type SessionConfig struct {
 	TimeoutMS int    `json:"timeout_ms"`
 }
 
-type sessionState struct {
-	mu         sync.RWMutex
-	configured bool
-	cfg        SessionConfig
+const defaultSessionScope = "default"
+
+type sessionScopeKey struct{}
+
+func WithSessionScope(ctx context.Context, scope string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, sessionScopeKey{}, normalizeSessionScope(scope))
 }
 
-func (s *sessionState) set(cfg SessionConfig) {
+func sessionScopeFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return defaultSessionScope
+	}
+	scope, _ := ctx.Value(sessionScopeKey{}).(string)
+	return normalizeSessionScope(scope)
+}
+
+func normalizeSessionScope(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return defaultSessionScope
+	}
+	return scope
+}
+
+type scopedSessionStore struct {
+	mu          sync.RWMutex
+	configByKey map[string]SessionConfig
+}
+
+func (s *scopedSessionStore) set(scope string, cfg SessionConfig) {
+	scope = normalizeSessionScope(scope)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cfg = cfg
-	s.configured = true
+	if s.configByKey == nil {
+		s.configByKey = map[string]SessionConfig{}
+	}
+	s.configByKey[scope] = cfg
 }
 
-func (s *sessionState) get() (SessionConfig, bool) {
+func (s *scopedSessionStore) get(scope string) (SessionConfig, bool) {
+	scope = normalizeSessionScope(scope)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if !s.configured {
+	if s.configByKey == nil {
 		return SessionConfig{}, false
 	}
-	return s.cfg, true
+	cfg, ok := s.configByKey[scope]
+	return cfg, ok
 }
 
-func (s *sessionState) clear() {
+func (s *scopedSessionStore) clear(scope string) {
+	scope = normalizeSessionScope(scope)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cfg = SessionConfig{}
-	s.configured = false
+	if s.configByKey == nil {
+		return
+	}
+	delete(s.configByKey, scope)
 }
 
 type Server struct {
@@ -64,8 +98,8 @@ type Server struct {
 	writer  io.Writer
 	writeMu sync.Mutex
 
-	tools   map[string]Tool
-	session sessionState
+	tools    map[string]Tool
+	sessions scopedSessionStore
 }
 
 func NewServer(r io.Reader, w io.Writer) *Server {
@@ -113,6 +147,39 @@ type rpcResponse struct {
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// HandleJSONRPC handles a single JSON-RPC request payload.
+// It returns the encoded response payload and a boolean indicating whether
+// the caller should emit a response (notifications return false).
+func (s *Server) HandleJSONRPC(ctx context.Context, payload []byte) ([]byte, bool, error) {
+	var req rpcRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		out, mErr := json.Marshal(rpcResponse{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "parse error"}})
+		return out, true, mErr
+	}
+	if req.JSONRPC == "" {
+		req.JSONRPC = "2.0"
+	}
+	if req.JSONRPC != "2.0" {
+		out, mErr := json.Marshal(rpcResponse{
+			JSONRPC: "2.0",
+			ID:      decodeID(req.ID),
+			Error:   &rpcError{Code: -32600, Message: "invalid request"},
+		})
+		return out, true, mErr
+	}
+	if len(req.ID) == 0 {
+		// Notification.
+		_ = s.handleRequest(ctx, req)
+		return nil, false, nil
+	}
+
+	out, err := json.Marshal(s.handleRequest(ctx, req))
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
 }
 
 func (s *Server) Serve() error {
@@ -329,11 +396,12 @@ func sortTools(tools []map[string]any) {
 	}
 }
 
-func (s *Server) configuredClient() (*vault.Client, SessionConfig, map[string]any, bool) {
-	cfg, ok := s.session.get()
+func (s *Server) configuredClient(ctx context.Context) (*vault.Client, SessionConfig, map[string]any, bool) {
+	scope := sessionScopeFromContext(ctx)
+	cfg, ok := s.sessions.get(scope)
 	if !ok {
 		if envCfg, envOK := sessionConfigFromEnv(); envOK {
-			s.session.set(envCfg)
+			s.sessions.set(scope, envCfg)
 			cfg = envCfg
 			ok = true
 		}

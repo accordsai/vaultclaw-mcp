@@ -44,7 +44,7 @@ func (s *Server) handleApprovalWait(ctx context.Context, args map[string]any) (m
 		TimeoutMS:      intArg(args, "timeout_ms"),
 		PollIntervalMS: intArg(args, "poll_interval_ms"),
 	}
-	c, _, fail, ok := s.configuredClient()
+	c, _, fail, ok := s.configuredClient(ctx)
 	if !ok {
 		return fail, nil
 	}
