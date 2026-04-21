@@ -41,6 +41,28 @@ func TestResolveSendEmailExecutable(t *testing.T) {
 	}
 }
 
+func TestResolveSendEmailExtractsSubjectAndMessageBodyVariants(t *testing.T) {
+	resolver, err := NewDefaultResolver()
+	if err != nil {
+		t.Fatalf("NewDefaultResolver err: %v", err)
+	}
+
+	result := resolver.Resolve(context.Background(), ResolveRequest{
+		RequestText: "send an email to skl83@cornell.edu with the subject hi and message body hello",
+		Options:     ResolveOptions{AllowSearchFallback: true},
+	}, nil)
+
+	if result.Status != StatusResolvedExecutable {
+		t.Fatalf("expected executable status, got %s (%v)", result.Status, result)
+	}
+	if got := asString(result.Inputs["subject"]); got != "hi" {
+		t.Fatalf("expected extracted subject 'hi', got %q", got)
+	}
+	if got := asString(result.Inputs["text_plain"]); got != "hello" {
+		t.Fatalf("expected extracted text_plain 'hello', got %q", got)
+	}
+}
+
 func TestResolveSendEmailAutofillsFromNL(t *testing.T) {
 	resolver, err := NewDefaultResolver()
 	if err != nil {
@@ -108,11 +130,11 @@ func TestResolveSendEmailMissingInputs(t *testing.T) {
 	if len(result.MissingInputGuidance) == 0 {
 		t.Fatalf("expected missing input guidance, got none: %+v", result)
 	}
-	if !result.NeedsClarification {
-		t.Fatalf("expected needs_clarification=true when unresolved fields require user input")
+	if result.NeedsClarification {
+		t.Fatalf("expected needs_clarification=false when missing inputs are policy-auto-enriched")
 	}
-	if result.ProgressHint == nil || result.ProgressHint.Mode != ProgressHintModeAskUser {
-		t.Fatalf("expected ASK_USER progress hint for unresolved route, got %+v", result.ProgressHint)
+	if result.ProgressHint == nil || result.ProgressHint.Mode != ProgressHintModeAutoEnrichAndRetry {
+		t.Fatalf("expected AUTO_ENRICH_AND_RETRY progress hint for unresolved route, got %+v", result.ProgressHint)
 	}
 }
 
@@ -261,6 +283,9 @@ func TestResolveWeatherGuidanceAndFactsRetry(t *testing.T) {
 	foundFactGuidance := false
 	for _, g := range initial.MissingInputGuidance {
 		if g.InputKey == "text_plain" && g.ResolutionMode == ResolutionModeAutoRetryWithFacts {
+			if kind := asString(g.ExternalFactRequest["fact_kind"]); kind != "weather_forecast" {
+				t.Fatalf("expected fact_kind=weather_forecast, got %q", kind)
+			}
 			foundFactGuidance = true
 		}
 	}
@@ -417,6 +442,9 @@ func TestResolveGenericHTTPGuidanceAndFactsRetry(t *testing.T) {
 		if key := asString(g.ExternalFactRequest["fact_key"]); key != "url" {
 			t.Fatalf("expected fact_key=url for generic.http url guidance, got %q", key)
 		}
+		if kind := asString(g.ExternalFactRequest["fact_kind"]); kind != "connector_input_generation" {
+			t.Fatalf("expected fact_kind=connector_input_generation for generic.http url guidance, got %q", kind)
+		}
 		parallelizable, _ := g.ExternalFactRequest["parallelizable"].(bool)
 		if !parallelizable {
 			t.Fatalf("expected generic.http fact guidance to be parallelizable: %+v", g)
@@ -440,5 +468,50 @@ func TestResolveGenericHTTPGuidanceAndFactsRetry(t *testing.T) {
 	}
 	if got := asString(retried.Inputs["url"]); got != "https://partner.example.com/webhook" {
 		t.Fatalf("expected url from facts, got %q", got)
+	}
+}
+
+func TestResolveSensitivePolicyAlwaysAsksUser(t *testing.T) {
+	resolver := NewResolver(Registry{
+		Version:             "1.1.0",
+		DocumentTypeAliases: map[string]string{},
+		Routes: []RegistryRoute{
+			{
+				RouteID:        "sensitive.token.route",
+				Domain:         "test.domain",
+				CookbookID:     "test.cookbook",
+				Version:        "1.0.0",
+				EntryID:        "entry",
+				EntryType:      "recipe.verb.v1",
+				Strategy:       StrategyRecipe,
+				Keywords:       []string{"token"},
+				RequiredInputs: []string{"api_token"},
+				EnrichmentPolicies: []RegistryEnrichmentPolicy{
+					{
+						InputKey:       "api_token",
+						ResolutionMode: ResolutionModeAutoRetryWithFacts,
+						FactKey:        "api_token",
+						FactKind:       "text_field_generation",
+						Sensitive:      true,
+						Parallelizable: true,
+					},
+				},
+			},
+		},
+	})
+
+	result := resolver.Resolve(context.Background(), ResolveRequest{
+		RequestText: "use token flow",
+		Options:     ResolveOptions{AllowSearchFallback: false},
+	}, nil)
+
+	if result.Status != StatusResolvedMissing {
+		t.Fatalf("expected missing status, got %s (%v)", result.Status, result)
+	}
+	if len(result.MissingInputGuidance) != 1 {
+		t.Fatalf("expected one guidance item, got %+v", result.MissingInputGuidance)
+	}
+	if result.MissingInputGuidance[0].ResolutionMode != ResolutionModeAskUser {
+		t.Fatalf("expected sensitive field to be ASK_USER, got %+v", result.MissingInputGuidance[0])
 	}
 }

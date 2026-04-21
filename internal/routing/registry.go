@@ -18,20 +18,33 @@ type Registry struct {
 }
 
 type RegistryRoute struct {
-	RouteID        string
-	Domain         string
-	CookbookID     string
-	Version        string
-	EntryID        string
-	EntryType      string
-	Strategy       ExecutionStrategy
-	ConnectorID    string
-	Verb           string
-	Keywords       []string
-	RequiredInputs []string
-	OptionalInputs []string
-	Tags           []string
-	Orchestration  map[string]any
+	RouteID            string
+	Domain             string
+	CookbookID         string
+	Version            string
+	EntryID            string
+	EntryType          string
+	Strategy           ExecutionStrategy
+	ConnectorID        string
+	Verb               string
+	Keywords           []string
+	RequiredInputs     []string
+	OptionalInputs     []string
+	Tags               []string
+	Orchestration      map[string]any
+	EnrichmentPolicies []RegistryEnrichmentPolicy
+}
+
+type RegistryEnrichmentPolicy struct {
+	InputKey       string
+	ResolutionMode MissingInputResolutionMode
+	FactKey        string
+	FactKind       string
+	Sensitive      bool
+	Parallelizable bool
+	BatchGroup     string
+	Instructions   string
+	Condition      string
 }
 
 type registryFile struct {
@@ -42,20 +55,33 @@ type registryFile struct {
 }
 
 type registryRouteRaw struct {
-	RouteID        string         `json:"route_id"`
-	Domain         string         `json:"domain"`
-	CookbookID     string         `json:"cookbook_id"`
-	Version        string         `json:"version"`
-	EntryID        string         `json:"entry_id"`
-	EntryType      string         `json:"entry_type"`
-	Strategy       string         `json:"strategy"`
-	ConnectorID    string         `json:"connector_id"`
-	Verb           string         `json:"verb"`
-	Keywords       []string       `json:"keywords"`
-	RequiredInputs []string       `json:"required_inputs"`
-	OptionalInputs []string       `json:"optional_inputs"`
-	Tags           []string       `json:"tags"`
-	Orchestration  map[string]any `json:"orchestration"`
+	RouteID            string                        `json:"route_id"`
+	Domain             string                        `json:"domain"`
+	CookbookID         string                        `json:"cookbook_id"`
+	Version            string                        `json:"version"`
+	EntryID            string                        `json:"entry_id"`
+	EntryType          string                        `json:"entry_type"`
+	Strategy           string                        `json:"strategy"`
+	ConnectorID        string                        `json:"connector_id"`
+	Verb               string                        `json:"verb"`
+	Keywords           []string                      `json:"keywords"`
+	RequiredInputs     []string                      `json:"required_inputs"`
+	OptionalInputs     []string                      `json:"optional_inputs"`
+	Tags               []string                      `json:"tags"`
+	Orchestration      map[string]any                `json:"orchestration"`
+	EnrichmentPolicies []registryEnrichmentPolicyRaw `json:"enrichment_policies"`
+}
+
+type registryEnrichmentPolicyRaw struct {
+	InputKey       string `json:"input_key"`
+	ResolutionMode string `json:"resolution_mode"`
+	FactKey        string `json:"fact_key"`
+	FactKind       string `json:"fact_kind"`
+	Sensitive      bool   `json:"sensitive"`
+	Parallelizable *bool  `json:"parallelizable"`
+	BatchGroup     string `json:"batch_group"`
+	Instructions   string `json:"instructions"`
+	Condition      string `json:"condition"`
 }
 
 func LoadDefaultRegistry() (Registry, error) {
@@ -121,6 +147,11 @@ func normalizeRegistryRoute(raw registryRouteRaw) (RegistryRoute, error) {
 		Tags:           normalizeStringList(raw.Tags),
 		Orchestration:  cloneMap(raw.Orchestration),
 	}
+	policies, err := normalizeEnrichmentPolicies(raw.EnrichmentPolicies)
+	if err != nil {
+		return RegistryRoute{}, err
+	}
+	route.EnrichmentPolicies = policies
 
 	if route.RouteID == "" {
 		return RegistryRoute{}, fmt.Errorf("route_id is required")
@@ -147,6 +178,65 @@ func normalizeRegistryRoute(raw registryRouteRaw) (RegistryRoute, error) {
 		}
 	}
 	return route, nil
+}
+
+func normalizeEnrichmentPolicies(raw []registryEnrichmentPolicyRaw) ([]RegistryEnrichmentPolicy, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make([]RegistryEnrichmentPolicy, 0, len(raw))
+	seen := map[string]struct{}{}
+	for idx, item := range raw {
+		inputKey := strings.TrimSpace(item.InputKey)
+		if inputKey == "" {
+			return nil, fmt.Errorf("enrichment_policies[%d].input_key is required", idx)
+		}
+		modeRaw := strings.TrimSpace(strings.ToUpper(item.ResolutionMode))
+		var mode MissingInputResolutionMode
+		switch MissingInputResolutionMode(modeRaw) {
+		case ResolutionModeAskUser:
+			mode = ResolutionModeAskUser
+		case ResolutionModeAutoRetryWithFacts:
+			mode = ResolutionModeAutoRetryWithFacts
+		default:
+			return nil, fmt.Errorf("enrichment_policies[%d].resolution_mode is invalid", idx)
+		}
+
+		factKey := strings.TrimSpace(item.FactKey)
+		factKind := strings.TrimSpace(item.FactKind)
+		if mode == ResolutionModeAutoRetryWithFacts {
+			if factKey == "" {
+				return nil, fmt.Errorf("enrichment_policies[%d].fact_key is required for AUTO_RETRY_WITH_FACTS", idx)
+			}
+			if factKind == "" {
+				return nil, fmt.Errorf("enrichment_policies[%d].fact_kind is required for AUTO_RETRY_WITH_FACTS", idx)
+			}
+		}
+
+		parallelizable := true
+		if item.Parallelizable != nil {
+			parallelizable = *item.Parallelizable
+		}
+		condition := strings.TrimSpace(strings.ToLower(item.Condition))
+		seenKey := strings.ToLower(inputKey) + "|" + condition
+		if _, ok := seen[seenKey]; ok {
+			return nil, fmt.Errorf("enrichment_policies[%d] duplicates input_key+condition for %q", idx, seenKey)
+		}
+		seen[seenKey] = struct{}{}
+
+		out = append(out, RegistryEnrichmentPolicy{
+			InputKey:       inputKey,
+			ResolutionMode: mode,
+			FactKey:        factKey,
+			FactKind:       factKind,
+			Sensitive:      item.Sensitive,
+			Parallelizable: parallelizable,
+			BatchGroup:     strings.TrimSpace(item.BatchGroup),
+			Instructions:   strings.TrimSpace(item.Instructions),
+			Condition:      condition,
+		})
+	}
+	return out, nil
 }
 
 func normalizeStringList(values []string) []string {

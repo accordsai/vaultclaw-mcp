@@ -19,6 +19,11 @@ const (
 )
 
 func main() {
+	if err := bootstrapCatalog(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "accords-mcp bootstrap error: %v\n", err)
+		os.Exit(1)
+	}
+
 	httpAddr := strings.TrimSpace(os.Getenv("ACCORDS_MCP_HTTP_ADDR"))
 	if httpAddr != "" {
 		if err := serveHTTP(httpAddr, strings.TrimSpace(os.Getenv("ACCORDS_MCP_HTTP_PATH"))); err != nil {

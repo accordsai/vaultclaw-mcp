@@ -496,20 +496,11 @@ func buildMissingInputGuidance(
 	if normalized == "" {
 		normalized = normalizeFreeText(rawText)
 	}
-	weatherSummary := weatherSummaryFromFacts(facts)
 
 	for _, inputKey := range missing {
-		if isGmailComposeRoute(route) {
-			if guidance, ok := buildComposeFactGuidance(inputKey, requiredFor, rawText, normalized, inputs, facts, weatherSummary); ok {
-				out = append(out, guidance)
-				continue
-			}
-		}
-		if strings.EqualFold(strings.TrimSpace(route.Domain), "generic.http") {
-			if guidance, ok := buildGenericHTTPFactGuidance(inputKey, requiredFor, rawText); ok {
-				out = append(out, guidance)
-				continue
-			}
+		if guidance, ok := buildPolicyMissingInputGuidance(route, inputKey, requiredFor, rawText, normalized, inputs, facts); ok {
+			out = append(out, guidance)
+			continue
 		}
 
 		out = append(out, MissingInputGuidance{
@@ -522,108 +513,138 @@ func buildMissingInputGuidance(
 	return out
 }
 
-func buildComposeFactGuidance(
+func buildPolicyMissingInputGuidance(
+	route RegistryRoute,
 	inputKey string,
 	requiredFor string,
 	rawText string,
-	normalized string,
+	normalizedText string,
 	inputs map[string]any,
 	facts map[string]any,
-	weatherSummary string,
 ) (MissingInputGuidance, bool) {
-	location, timeframe, weatherRequested := detectWeatherIntent(normalized)
-	bodyNeedsExternal := shouldDeferBodyAutofillForExternal(rawText, normalized, inputs, weatherRequested, weatherSummary)
-	subjectNeedsExternal := shouldDeferSubjectAutofillForExternal(rawText, normalized, inputs, bodyNeedsExternal)
+	policy, ok := selectEnrichmentPolicy(route.EnrichmentPolicies, inputKey, normalizedText, rawText, inputs, facts)
+	if !ok {
+		return MissingInputGuidance{}, false
+	}
+	trimmedInputKey := strings.TrimSpace(inputKey)
+	if policy.Sensitive || policy.ResolutionMode == ResolutionModeAskUser {
+		return MissingInputGuidance{
+			InputKey:         trimmedInputKey,
+			RequiredForRoute: requiredFor,
+			ResolutionMode:   ResolutionModeAskUser,
+			Question:         questionForMissingInput(trimmedInputKey),
+		}, true
+	}
+	if policy.ResolutionMode != ResolutionModeAutoRetryWithFacts {
+		return MissingInputGuidance{
+			InputKey:         trimmedInputKey,
+			RequiredForRoute: requiredFor,
+			ResolutionMode:   ResolutionModeAskUser,
+			Question:         questionForMissingInput(trimmedInputKey),
+		}, true
+	}
 
-	switch strings.TrimSpace(inputKey) {
-	case "text_plain":
-		if weatherRequested && weatherSummary == "" {
-			factReq := map[string]any{
-				"fact_key":       "weather_summary",
-				"kind":           "weather_forecast",
-				"parallelizable": true,
-				"batch_group":    "gmail_compose_enrichment",
-				"timeframe": func() string {
-					if timeframe == "" {
-						return "today"
-					}
-					return timeframe
-				}(),
-				"instructions": "Fetch a concise weather summary and retry vaultclaw_route_resolve with context.facts.weather_summary.",
-			}
+	factKey := strings.TrimSpace(policy.FactKey)
+	if factKey == "" {
+		factKey = trimmedInputKey
+	}
+	factReq := map[string]any{
+		"input_key":      trimmedInputKey,
+		"fact_key":       factKey,
+		"fact_kind":      strings.TrimSpace(policy.FactKind),
+		"kind":           strings.TrimSpace(policy.FactKind), // Backward-compatible with existing clients.
+		"parallelizable": policy.Parallelizable,
+		"batch_group":    resolveBatchGroup(policy.BatchGroup, route.RouteID),
+		"request_text":   strings.TrimSpace(rawText),
+		"instructions":   resolvePolicyInstructions(policy, trimmedInputKey, factKey),
+	}
+	if strings.ToLower(strings.TrimSpace(policy.FactKind)) == "weather_forecast" {
+		location, timeframe, weatherRequested := detectWeatherIntent(normalizedText)
+		if weatherRequested {
 			if location != "" {
 				factReq["location"] = location
 			}
-			return MissingInputGuidance{
-				InputKey:            inputKey,
-				RequiredForRoute:    requiredFor,
-				ResolutionMode:      ResolutionModeAutoRetryWithFacts,
-				Question:            "Fetch weather details with normal tools, then retry route resolve with context.facts.weather_summary.",
-				ExternalFactRequest: factReq,
-			}, true
-		}
-		if bodyNeedsExternal {
-			factReq := map[string]any{
-				"fact_key":       "email_body",
-				"kind":           "email_body_generation",
-				"parallelizable": true,
-				"batch_group":    "gmail_compose_enrichment",
-				"request_text":   strings.TrimSpace(rawText),
-				"instructions":   "Generate the requested email body content and retry vaultclaw_route_resolve with context.facts.email_body.",
+			if timeframe == "" {
+				timeframe = "today"
 			}
-			return MissingInputGuidance{
-				InputKey:            inputKey,
-				RequiredForRoute:    requiredFor,
-				ResolutionMode:      ResolutionModeAutoRetryWithFacts,
-				Question:            "Generate the email body content with normal tools, then retry route resolve with context.facts.email_body.",
-				ExternalFactRequest: factReq,
-			}, true
+			factReq["timeframe"] = timeframe
 		}
-	case "subject":
-		if subjectNeedsExternal {
-			factReq := map[string]any{
-				"fact_key":       "email_subject",
-				"kind":           "email_subject_generation",
-				"parallelizable": true,
-				"batch_group":    "gmail_compose_enrichment",
-				"request_text":   strings.TrimSpace(rawText),
-				"instructions":   "Generate a concise email subject that matches the request and retry vaultclaw_route_resolve with context.facts.email_subject.",
-			}
-			return MissingInputGuidance{
-				InputKey:            inputKey,
-				RequiredForRoute:    requiredFor,
-				ResolutionMode:      ResolutionModeAutoRetryWithFacts,
-				Question:            "Generate a concise subject with normal tools, then retry route resolve with context.facts.email_subject.",
-				ExternalFactRequest: factReq,
-			}, true
-		}
-	}
-	return MissingInputGuidance{}, false
-}
-
-func buildGenericHTTPFactGuidance(inputKey string, requiredFor string, rawText string) (MissingInputGuidance, bool) {
-	trimmed := strings.TrimSpace(inputKey)
-	if trimmed == "" {
-		return MissingInputGuidance{}, false
-	}
-	factReq := map[string]any{
-		"fact_key":       trimmed,
-		"kind":           "connector_input_generation",
-		"connector_id":   "generic.http",
-		"verb":           "generic.http.request.v1",
-		"input_key":      trimmed,
-		"parallelizable": true,
-		"batch_group":    "generic_http_enrichment",
-		"request_text":   strings.TrimSpace(rawText),
-		"instructions":   fmt.Sprintf("Resolve %s and retry vaultclaw_route_resolve with context.facts.%s.", trimmed, trimmed),
 	}
 	return MissingInputGuidance{
-		InputKey:            trimmed,
+		InputKey:            trimmedInputKey,
 		RequiredForRoute:    requiredFor,
 		ResolutionMode:      ResolutionModeAutoRetryWithFacts,
-		Question:            fmt.Sprintf("Resolve %s with normal tools, then retry route resolve with context.facts.%s.", trimmed, trimmed),
+		Question:            fmt.Sprintf("Resolve %s and retry route resolve with context.facts.%s.", trimmedInputKey, factKey),
 		ExternalFactRequest: factReq,
 	}, true
+}
+
+func selectEnrichmentPolicy(
+	policies []RegistryEnrichmentPolicy,
+	inputKey string,
+	normalizedText string,
+	rawText string,
+	inputs map[string]any,
+	facts map[string]any,
+) (RegistryEnrichmentPolicy, bool) {
+	trimmed := strings.TrimSpace(inputKey)
+	if len(policies) == 0 || trimmed == "" {
+		return RegistryEnrichmentPolicy{}, false
+	}
+	normalizedInputKey := strings.ToLower(trimmed)
+	for _, policy := range policies {
+		if strings.ToLower(strings.TrimSpace(policy.InputKey)) != normalizedInputKey {
+			continue
+		}
+		if policyConditionMatches(policy.Condition, normalizedText, rawText, inputs, facts) {
+			return policy, true
+		}
+	}
+	return RegistryEnrichmentPolicy{}, false
+}
+
+func policyConditionMatches(
+	condition string,
+	normalizedText string,
+	rawText string,
+	inputs map[string]any,
+	facts map[string]any,
+) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(condition))
+	if trimmed == "" {
+		return true
+	}
+	switch trimmed {
+	case "weather_requested":
+		_, _, requested := detectWeatherIntent(normalizedText)
+		return requested && weatherSummaryFromFacts(facts) == ""
+	case "semantic_body_request":
+		return shouldDeferBodyAutofillForExternal(rawText, normalizedText, inputs, false, "")
+	case "semantic_subject_request":
+		bodyNeedsExternal := shouldDeferBodyAutofillForExternal(rawText, normalizedText, inputs, false, "")
+		return shouldDeferSubjectAutofillForExternal(rawText, normalizedText, inputs, bodyNeedsExternal)
+	default:
+		return false
+	}
+}
+
+func resolveBatchGroup(raw string, routeID string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed != "" {
+		return trimmed
+	}
+	base := strings.TrimSpace(routeID)
+	if base == "" {
+		return "default"
+	}
+	return strings.ReplaceAll(strings.ToLower(base), ".", "_") + "_enrichment"
+}
+
+func resolvePolicyInstructions(policy RegistryEnrichmentPolicy, inputKey string, factKey string) string {
+	if instructions := strings.TrimSpace(policy.Instructions); instructions != "" {
+		return instructions
+	}
+	return fmt.Sprintf("Resolve %s and retry vaultclaw_route_resolve with context.facts.%s.", inputKey, factKey)
 }
 
 func hasAskUserGuidance(guidance []MissingInputGuidance) bool {
@@ -1075,19 +1096,24 @@ func extractInputs(rawText string, aliasMap map[string]string) map[string]any {
 		inputs["to"] = emails
 	}
 	if subject := firstMatch(text,
+		`(?i)\bwith\s+(?:the\s+)?subject\s+['"]?([^'"\n,.;:!?]+?)['"]?\s+and\s+(?:message\s+)?body\b`,
 		`(?i)\bsubject\s*(?:is|=|:)\s*['"]([^'"\n]+)['"]`,
 		`(?i)\bsubject\s+as\s+['"]?([^'"\n,.;:!?]+)`,
 		`(?i)\bsubject\s+to\s+be\s+['"]?([^'"\n,.;:!?]+)`,
+		`(?i)\bsubject\s+['"]?([^'"\n,.;:!?]+?)['"]?\s+and\s+(?:message\s+)?body\b`,
 		`(?i)\bsubject\s+['"]([^'"\n]+)['"]`,
-		`(?i)\bwith\s+subject\s+['"]([^'"\n]+)['"]`,
+		`(?i)\bwith\s+(?:the\s+)?subject\s+['"]([^'"\n]+)['"]`,
+		`(?i)\bwith\s+(?:the\s+)?subject\s+['"]?([^'"\n,.;:!?]+(?:\s+[^'"\n,.;:!?]+){0,10})`,
 	); subject != "" {
 		inputs["subject"] = subject
 	}
 	if body := firstMatch(text,
-		`(?i)\bbody\s*(?:is|=|:)\s*['"]([^'"\n]+)['"]`,
-		`(?i)\bbody\s+to\s+(?:have|say|include)\s+['"]?([^'"\n]+)`,
-		`(?i)\bbody\s+['"]([^'"\n]+)['"]`,
-		`(?i)\bwith\s+body\s+['"]([^'"\n]+)['"]`,
+		`(?i)\b(?:and\s+)?(?:message\s+)?body\s*(?:is|=|:)\s*['"]([^'"\n]+)['"]`,
+		`(?i)\b(?:and\s+)?(?:message\s+)?body\s*(?:is|=|:)\s*['"]?([^'"\n,.;:!?]+(?:\s+[^'"\n,.;:!?]+){0,24})`,
+		`(?i)\b(?:and\s+)?(?:message\s+)?body\s+to\s+(?:have|say|include)\s+['"]?([^'"\n]+)`,
+		`(?i)\b(?:and\s+)?(?:message\s+)?body\s+['"]([^'"\n]+)['"]`,
+		`(?i)\b(?:and\s+)?(?:message\s+)?body\s+['"]?([^'"\n,.;:!?]+(?:\s+[^'"\n,.;:!?]+){0,24})`,
+		`(?i)\bwith\s+(?:message\s+)?body\s+['"]([^'"\n]+)['"]`,
 	); body != "" {
 		inputs["text_plain"] = body
 	}

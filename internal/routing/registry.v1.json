@@ -1,6 +1,6 @@
 {
   "type": "vaultclaw.routing.registry.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "document_type_aliases": {
     "passport": "identity.passport",
     "passport copy": "identity.passport",
@@ -22,7 +22,41 @@
       "keywords": ["send", "email", "gmail", "subject", "body"],
       "required_inputs": ["to", "subject", "text_plain"],
       "optional_inputs": ["cc", "bcc", "text_html", "document_attachments"],
-      "tags": ["gmail", "send", "draft"]
+      "tags": ["gmail", "send", "draft"],
+      "enrichment_policies": [
+        {
+          "input_key": "to",
+          "resolution_mode": "ASK_USER"
+        },
+        {
+          "input_key": "subject",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "email_subject",
+          "fact_kind": "text_field_generation",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "instructions": "Generate a concise email subject that matches the request and retry vaultclaw_route_resolve with context.facts.email_subject."
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "weather_summary",
+          "fact_kind": "weather_forecast",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "condition": "weather_requested",
+          "instructions": "Fetch a concise weather summary and retry vaultclaw_route_resolve with context.facts.weather_summary."
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "email_body",
+          "fact_kind": "text_field_generation",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "instructions": "Generate the requested email body content and retry vaultclaw_route_resolve with context.facts.email_body."
+        }
+      ]
     },
     {
       "route_id": "google.gmail.reply_email.v1",
@@ -35,7 +69,36 @@
       "keywords": ["reply", "respond", "thread", "email", "gmail"],
       "required_inputs": ["to", "thread_id", "text_plain"],
       "optional_inputs": ["subject", "text_html", "document_attachments"],
-      "tags": ["gmail", "reply", "thread"]
+      "tags": ["gmail", "reply", "thread"],
+      "enrichment_policies": [
+        {
+          "input_key": "to",
+          "resolution_mode": "ASK_USER"
+        },
+        {
+          "input_key": "thread_id",
+          "resolution_mode": "ASK_USER"
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "weather_summary",
+          "fact_kind": "weather_forecast",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "condition": "weather_requested",
+          "instructions": "Fetch a concise weather summary and retry vaultclaw_route_resolve with context.facts.weather_summary."
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "email_body",
+          "fact_kind": "text_field_generation",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "instructions": "Generate the requested email body content and retry vaultclaw_route_resolve with context.facts.email_body."
+        }
+      ]
     },
     {
       "route_id": "google.gmail.create_draft.v1",
@@ -48,7 +111,41 @@
       "keywords": ["create", "draft", "email", "gmail", "subject"],
       "required_inputs": ["to", "subject", "text_plain"],
       "optional_inputs": ["cc", "bcc", "text_html", "document_attachments"],
-      "tags": ["gmail", "draft"]
+      "tags": ["gmail", "draft"],
+      "enrichment_policies": [
+        {
+          "input_key": "to",
+          "resolution_mode": "ASK_USER"
+        },
+        {
+          "input_key": "subject",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "email_subject",
+          "fact_kind": "text_field_generation",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "instructions": "Generate a concise email subject that matches the request and retry vaultclaw_route_resolve with context.facts.email_subject."
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "weather_summary",
+          "fact_kind": "weather_forecast",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "condition": "weather_requested",
+          "instructions": "Fetch a concise weather summary and retry vaultclaw_route_resolve with context.facts.weather_summary."
+        },
+        {
+          "input_key": "text_plain",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "email_body",
+          "fact_kind": "text_field_generation",
+          "parallelizable": true,
+          "batch_group": "gmail_compose_enrichment",
+          "instructions": "Generate the requested email body content and retry vaultclaw_route_resolve with context.facts.email_body."
+        }
+      ]
     },
     {
       "route_id": "google.gmail.get_message_metadata.v1",
@@ -151,6 +248,17 @@
       "required_inputs": ["url"],
       "optional_inputs": ["method"],
       "tags": ["http", "unbounded"],
+      "enrichment_policies": [
+        {
+          "input_key": "url",
+          "resolution_mode": "AUTO_RETRY_WITH_FACTS",
+          "fact_key": "url",
+          "fact_kind": "connector_input_generation",
+          "parallelizable": true,
+          "batch_group": "generic_http_enrichment",
+          "instructions": "Resolve url and retry vaultclaw_route_resolve with context.facts.url."
+        }
+      ],
       "orchestration": {
         "unbounded_profiles": true,
         "auto_create_profiles": true

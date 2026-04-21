@@ -76,12 +76,12 @@ func TestRouteResolveMissingInputs(t *testing.T) {
 	if len(guidance) == 0 {
 		t.Fatalf("expected missing_input_guidance for unresolved route: %v", data)
 	}
-	if needs, _ := data["needs_clarification"].(bool); !needs {
-		t.Fatalf("expected needs_clarification=true for unresolved user input: %v", data)
+	if needs, _ := data["needs_clarification"].(bool); needs {
+		t.Fatalf("expected needs_clarification=false when policy supports auto enrichment: %v", data)
 	}
 	progressHint, _ := data["progress_hint"].(*routing.ProgressHint)
-	if progressHint == nil || progressHint.Mode != routing.ProgressHintModeAskUser {
-		t.Fatalf("expected ASK_USER progress_hint for unresolved user input: %v", data["progress_hint"])
+	if progressHint == nil || progressHint.Mode != routing.ProgressHintModeAutoEnrichAndRetry {
+		t.Fatalf("expected AUTO_ENRICH_AND_RETRY progress_hint for unresolved user input: %v", data["progress_hint"])
 	}
 }
 
@@ -434,28 +434,21 @@ func TestRouteResolveSearchTemplateRequiredInputsGuidanceAndRetry(t *testing.T) 
 		t.Fatalf("expected search source, got %s route=%+v", route.Source, route)
 	}
 	guidance, _ := initialData["missing_input_guidance"].([]routing.MissingInputGuidance)
-	hasURL := false
-	hasAPIKey := false
+	hasURLAsk := false
+	hasAPIKeyAsk := false
 	for _, item := range guidance {
-		if item.ResolutionMode != routing.ResolutionModeAutoRetryWithFacts {
-			continue
-		}
 		switch item.InputKey {
 		case "url":
-			hasURL = true
+			hasURLAsk = item.ResolutionMode == routing.ResolutionModeAskUser
 		case "api_key":
-			hasAPIKey = true
-		}
-		parallelizable, _ := item.ExternalFactRequest["parallelizable"].(bool)
-		if !parallelizable {
-			t.Fatalf("expected parallelizable=true for search-template missing input guidance: %+v", item)
+			hasAPIKeyAsk = item.ResolutionMode == routing.ResolutionModeAskUser
 		}
 	}
-	if !hasURL || !hasAPIKey {
-		t.Fatalf("expected AUTO_RETRY guidance for url+api_key, got %+v", guidance)
+	if !hasURLAsk || !hasAPIKeyAsk {
+		t.Fatalf("expected ASK_USER guidance for url+api_key when route has no enrichment policy, got %+v", guidance)
 	}
-	if needs, _ := initialData["needs_clarification"].(bool); needs {
-		t.Fatalf("expected needs_clarification=false for generic.http search-template external facts: %v", initialData)
+	if needs, _ := initialData["needs_clarification"].(bool); !needs {
+		t.Fatalf("expected needs_clarification=true for policy-missing search-template inputs: %v", initialData)
 	}
 
 	retried, err := s.handleRouteResolve(context.Background(), map[string]any{
