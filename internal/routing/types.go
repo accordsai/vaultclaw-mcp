@@ -26,6 +26,7 @@ const (
 	StrategyRecipe              ExecutionStrategy = "RECIPE"
 	StrategyConnectorExecuteJob ExecutionStrategy = "CONNECTOR_EXECUTE_JOB"
 	StrategyPlanExecute         ExecutionStrategy = "PLAN_EXECUTE"
+	StrategyToolInvoke          ExecutionStrategy = "TOOL_INVOKE"
 )
 
 type ResolveOptions struct {

@@ -42,6 +42,7 @@ const BOOTSTRAP_TOOL_NAMES = [
   "vaultclaw_document_types_latest",
   "vaultclaw_document_types_suggest",
   "vaultclaw_job_get",
+  "vaultclaw_passport_email_workflow",
   "vaultclaw_plan_execute",
   "vaultclaw_plan_run_get",
   "vaultclaw_plan_unbounded_profile_preview",

@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	minRegistryScore   = 4
-	searchScoreMinimum = 3
+	minRegistryScore            = 4
+	searchScoreMinimum          = 3
+	passportFieldsWorkflowRoute = "vaultclaw.passport_email_fields.v1"
+	passportFieldsWorkflowTool  = "vaultclaw_passport_email_workflow"
 )
 
 var (
@@ -52,6 +54,9 @@ func (r *Resolver) Resolve(ctx context.Context, req ResolveRequest, search Searc
 	text := normalizeFreeText(textRaw)
 	tokens := tokenSet(text)
 	inputs := extractInputs(textRaw, r.registry.DocumentTypeAliases)
+	if special, ok := r.resolvePassportFieldsWorkflow(textRaw, text, tokens, inputs); ok {
+		return special
+	}
 
 	primary, topScore, secondScore, tied := r.pickRegistryRoute(text, tokens)
 	if primary != nil && topScore >= minRegistryScore {
@@ -85,6 +90,88 @@ func (r *Resolver) Resolve(ctx context.Context, req ResolveRequest, search Searc
 		},
 		FallbackHint: "Use /vault for explicit Vault actions or run the request without /vault for normal agent routing.",
 	}
+}
+
+func (r *Resolver) resolvePassportFieldsWorkflow(
+	rawText string,
+	normalizedText string,
+	tokens map[string]struct{},
+	baseInputs map[string]any,
+) (ResolveResult, bool) {
+	if !wantsPassportFieldsWorkflow(tokens, normalizedText) {
+		return ResolveResult{}, false
+	}
+
+	recipients := recipientsFromInputs(baseInputs["to"])
+	commonRoute := RouteRef{
+		RouteID:   passportFieldsWorkflowRoute,
+		EntryID:   passportFieldsWorkflowTool,
+		EntryType: "tool.workflow.v1",
+		Source:    "intent",
+	}
+	commonExec := ExecutionSpec{
+		Strategy: StrategyToolInvoke,
+		Tool:     passportFieldsWorkflowTool,
+	}
+
+	if len(recipients) == 0 {
+		guidance := []MissingInputGuidance{
+			{
+				InputKey:         "to",
+				RequiredForRoute: passportFieldsWorkflowRoute,
+				ResolutionMode:   ResolutionModeAskUser,
+				Question:         questionForMissingInput("to"),
+			},
+		}
+		return ResolveResult{
+			Status:               StatusResolvedMissing,
+			Confidence:           ConfidenceHigh,
+			Domain:               "google.gmail",
+			Route:                commonRoute,
+			Execution:            commonExec,
+			Inputs:               map[string]any{"request_text": strings.TrimSpace(rawText), "execute": true},
+			MissingInputs:        []string{"to"},
+			MissingInputGuidance: guidance,
+			ProgressHint:         buildProgressHint(guidance),
+			NeedsClarification:   true,
+			Reasons:              []string{"passport field extraction requested but recipient email is missing"},
+			FallbackHint:         "Provide a recipient email to continue the passport-field workflow.",
+		}, true
+	}
+
+	if len(recipients) > 1 {
+		return ResolveResult{
+			Status:             StatusAmbiguous,
+			Confidence:         ConfidenceHigh,
+			Domain:             "google.gmail",
+			Route:              commonRoute,
+			Execution:          commonExec,
+			Inputs:             map[string]any{"request_text": strings.TrimSpace(rawText), "execute": true},
+			NeedsClarification: true,
+			Reasons:            []string{"passport field extraction requested with multiple recipient emails"},
+			FallbackHint:       "Provide exactly one recipient email when requesting passport fields in the email body.",
+		}, true
+	}
+
+	toolArgs := map[string]any{
+		"request_text":    strings.TrimSpace(rawText),
+		"recipient_email": recipients[0],
+		"execute":         true,
+	}
+	if subject := asString(baseInputs["subject"]); subject != "" {
+		toolArgs["subject"] = subject
+	}
+	return ResolveResult{
+		Status:     StatusResolvedExecutable,
+		Confidence: ConfidenceHigh,
+		Domain:     "google.gmail",
+		Route:      commonRoute,
+		Execution:  commonExec,
+		Inputs:     toolArgs,
+		Reasons: []string{
+			"matched explicit intent to include passport fields/details in the email body",
+		},
+	}, true
 }
 
 func (r *Resolver) resolveMatchedRoute(
@@ -956,6 +1043,70 @@ func hasSemanticSubjectRequest(normalizedText string) bool {
 	return strings.Contains(normalizedText, "subject as ") ||
 		strings.Contains(normalizedText, "subject to be ") ||
 		strings.Contains(normalizedText, "subject line")
+}
+
+func wantsPassportFieldsWorkflow(tokens map[string]struct{}, normalizedText string) bool {
+	if _, ok := tokens["passport"]; !ok {
+		return false
+	}
+	if _, ok := tokens["email"]; !ok {
+		if _, gmail := tokens["gmail"]; !gmail {
+			return false
+		}
+	}
+
+	padded := " " + strings.TrimSpace(normalizedText) + " "
+	if strings.Contains(padded, " without passport fields ") ||
+		strings.Contains(padded, " no passport fields ") ||
+		strings.Contains(padded, " without passport details ") ||
+		strings.Contains(padded, " no passport details ") {
+		return false
+	}
+
+	if strings.Contains(padded, " passport fields ") || strings.Contains(padded, " passport details ") {
+		return true
+	}
+
+	if _, fields := tokens["fields"]; fields {
+		if _, body := tokens["body"]; body {
+			return true
+		}
+	}
+	if _, details := tokens["details"]; details {
+		if _, body := tokens["body"]; body {
+			return true
+		}
+	}
+	return false
+}
+
+func recipientsFromInputs(raw any) []string {
+	switch v := raw.(type) {
+	case []string:
+		return uniqueStrings(v)
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			value, ok := item.(string)
+			if !ok {
+				continue
+			}
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+		return uniqueStrings(out)
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return nil
+		}
+		return []string{trimmed}
+	default:
+		return nil
+	}
 }
 
 func weatherSummaryFromFacts(facts map[string]any) string {

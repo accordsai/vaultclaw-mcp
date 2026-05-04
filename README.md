@@ -237,6 +237,48 @@ Example attachment-aware prompt flow:
 4. Render+validate Gmail plan and preflight with `vaultclaw_document_types_latest(type_id="identity.passport", subject_id="self")`.
 5. Execute only if preflight resolves.
 
+### Passport Copy + Details Workflow
+
+`vaultclaw_passport_email_workflow` adds a deterministic orchestration flow for:
+
+- "Send an email to `<recipient_email>` with a copy of my passport and include my passport fields in the email body."
+
+Inputs:
+
+- required: `recipient_email` (or include in `request_text`)
+- optional: `subject` (defaults to `Passport Copy and Details`)
+- optional: `body_style`
+- optional resume fields: `passport_document_id`, `manual_fields`
+- optional: `execute` (`true` by default; set `false` to return plan + plan_input only)
+
+Behavior:
+
+1. Resolves passport document binding (`identity.passport`, `subject_id=self`).
+2. Runs:
+   - `identity.extraction.run.v1` with `profile_kind=KYC`, `provider=aws.textract.v1`, `mode=ANALYZE_AND_SAVE`
+   - `identity.profile.read.v1` for required slots:
+     - `given_name`
+     - `family_name`
+     - `passport_number`
+     - `passport_expiry_date`
+     - `passport_issuing_country`
+3. Builds a plain-text email body with labeled passport fields.
+4. Builds one connector plan containing identity + Gmail steps:
+   - `identity.extraction.run.v1`
+   - `identity.profile.read.v1`
+   - `google.gmail.drafts.create`
+   - `google.gmail.drafts.send`
+5. `google.gmail.drafts.send` binds `draft_id` from `create_draft` step output.
+
+Structured recovery states:
+
+- `MCP_RECIPIENT_REQUIRED`
+- `MCP_DOCUMENT_UPLOAD_REQUIRED` (includes upload action payload)
+- `MCP_PASSPORT_EXTRACTION_FAILED`
+- `MCP_PASSPORT_PROFILE_READ_FAILED`
+- `MCP_MANUAL_FIELDS_REQUIRED` (includes only missing fields for manual input)
+- `MCP_GMAIL_DRAFT_SEND_FAILED`
+
 ### Plans
 
 1. `vaultclaw_plan_validate(plan)`

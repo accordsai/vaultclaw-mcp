@@ -99,6 +99,12 @@ func TestResolveSendEmailAttachmentDefaults(t *testing.T) {
 	if result.Status != StatusResolvedExecutable {
 		t.Fatalf("expected executable status, got %s (%v)", result.Status, result)
 	}
+	if got := strings.TrimSpace(string(result.Execution.Strategy)); got != string(StrategyTemplate) {
+		t.Fatalf("expected TEMPLATE strategy for attachment-only flow, got %q", got)
+	}
+	if got := strings.TrimSpace(result.Execution.Tool); got != "vaultclaw_template_render" {
+		t.Fatalf("expected template render tool for attachment-only flow, got %q", got)
+	}
 	if got := result.Inputs["subject"]; got == nil || got == "" {
 		t.Fatalf("expected default subject for attachment flow, got %v", got)
 	}
@@ -107,6 +113,59 @@ func TestResolveSendEmailAttachmentDefaults(t *testing.T) {
 	}
 	if len(result.AutofilledInputs) < 2 {
 		t.Fatalf("expected attachment defaults to be tracked as autofills, got %+v", result.AutofilledInputs)
+	}
+}
+
+func TestResolvePassportFieldsInBodyRoutesWorkflowTool(t *testing.T) {
+	resolver, err := NewDefaultResolver()
+	if err != nil {
+		t.Fatalf("NewDefaultResolver err: %v", err)
+	}
+
+	result := resolver.Resolve(context.Background(), ResolveRequest{
+		RequestText: "send an email to skl83@cornell.edu with a copy of my passport and the passport fields in the body",
+		Options:     ResolveOptions{AllowSearchFallback: true},
+	}, nil)
+
+	if result.Status != StatusResolvedExecutable {
+		t.Fatalf("expected executable status, got %s (%v)", result.Status, result)
+	}
+	if got := strings.TrimSpace(string(result.Execution.Strategy)); got != string(StrategyToolInvoke) {
+		t.Fatalf("expected TOOL_INVOKE strategy, got %q", got)
+	}
+	if got := strings.TrimSpace(result.Execution.Tool); got != "vaultclaw_passport_email_workflow" {
+		t.Fatalf("expected passport workflow tool, got %q", got)
+	}
+	if got := strings.TrimSpace(asString(result.Inputs["recipient_email"])); got != "skl83@cornell.edu" {
+		t.Fatalf("expected recipient_email from prompt, got %q", got)
+	}
+	if got := strings.TrimSpace(asString(result.Inputs["request_text"])); got == "" {
+		t.Fatalf("expected request_text to be forwarded for workflow context")
+	}
+}
+
+func TestResolvePassportFieldsInBodyMissingRecipient(t *testing.T) {
+	resolver, err := NewDefaultResolver()
+	if err != nil {
+		t.Fatalf("NewDefaultResolver err: %v", err)
+	}
+
+	result := resolver.Resolve(context.Background(), ResolveRequest{
+		RequestText: "send an email with a copy of my passport and include passport fields in the body",
+		Options:     ResolveOptions{AllowSearchFallback: true},
+	}, nil)
+
+	if result.Status != StatusResolvedMissing {
+		t.Fatalf("expected missing-input status, got %s (%v)", result.Status, result)
+	}
+	if len(result.MissingInputs) != 1 || result.MissingInputs[0] != "to" {
+		t.Fatalf("expected missing input 'to', got %v", result.MissingInputs)
+	}
+	if got := strings.TrimSpace(string(result.Execution.Strategy)); got != string(StrategyToolInvoke) {
+		t.Fatalf("expected TOOL_INVOKE strategy for missing recipient workflow intent, got %q", got)
+	}
+	if got := strings.TrimSpace(result.Execution.Tool); got != "vaultclaw_passport_email_workflow" {
+		t.Fatalf("expected passport workflow tool, got %q", got)
 	}
 }
 

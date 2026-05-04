@@ -34,6 +34,23 @@ func (s *Server) registerOrchestrationTools() {
 		},
 		Handler: s.handlePlanUnboundedProfilePreview,
 	})
+	s.addTool(Tool{
+		Name:        "vaultclaw_passport_email_workflow",
+		Description: "Plan and optionally execute the passport-copy email workflow with KYC field extraction and Gmail send.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"request_text":         map[string]any{"type": "string"},
+				"recipient_email":      map[string]any{"type": "string"},
+				"subject":              map[string]any{"type": "string"},
+				"body_style":           map[string]any{"type": "string"},
+				"passport_document_id": map[string]any{"type": "string"},
+				"manual_fields":        map[string]any{"type": "object"},
+				"execute":              map[string]any{"type": "boolean"},
+			},
+		},
+		Handler: s.handlePassportEmailWorkflow,
+	})
 }
 
 func (s *Server) handleUnboundedProfileResolve(ctx context.Context, args map[string]any) (map[string]any, error) {
